@@ -157,6 +157,31 @@ function togglePaid(billId) {
   saveAppData();
 }
 
+/**
+ * Auto-marks autopay bills as paid once their due day has passed
+ * in the current month. Only runs for the current month view.
+ * Called once at boot and on each render.
+ */
+function autoMarkAutopay() {
+  if (!isViewingCurrentMonth()) return;
+  const mk   = viewMonthKey();
+  const paid = getPaidSet();
+  const day  = TODAY.getDate();
+  let changed = false;
+
+  AppData.bills.forEach((b) => {
+    if (b.auto && b.day <= day && !paid.has(b.id)) {
+      paid.add(b.id);
+      changed = true;
+    }
+  });
+
+  if (changed) {
+    AppData.paid[mk] = [...paid];
+    saveAppData();
+  }
+}
+
 /* ── Derived Totals ──────────────────────────────────────── */
 
 function totalIncome() {
@@ -165,6 +190,18 @@ function totalIncome() {
 
 function totalBills() {
   return AppData.bills.reduce((sum, b) => sum + b.amount, 0);
+}
+
+/**
+ * Sum of only the bills marked as paid this month.
+ * Used for the balance calculation — unpaid bills don't reduce
+ * available money until the user confirms payment.
+ */
+function totalPaidBills() {
+  const paid = getPaidSet();
+  return AppData.bills
+    .filter((b) => paid.has(b.id))
+    .reduce((sum, b) => sum + b.amount, 0);
 }
 
 function totalDebt() {

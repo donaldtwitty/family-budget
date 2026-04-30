@@ -21,6 +21,7 @@ let spendFilter  = 'All';
  * Called after any state mutation.
  */
 function render() {
+  autoMarkAutopay();
   updateHeader();
 
   const content = document.getElementById('content');

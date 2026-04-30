@@ -23,7 +23,7 @@ function updateHeader() {
 
   document.getElementById('hlbl').textContent   = viewMonthLabel();
   document.getElementById('hinc').textContent   = fmt(inc);
-  document.getElementById('hbal').textContent   = fmt(inc - bills - spent);
+  document.getElementById('hbal').textContent   = fmt(inc - totalPaidBills() - spent);
   document.getElementById('hbills').textContent = fmt(bills);
   document.getElementById('hspent').textContent = fmt(spent);
   document.getElementById('hdebt').textContent  = fmt(totalDebt());
