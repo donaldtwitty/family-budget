@@ -297,8 +297,8 @@ function registerServiceWorker() {
 }
 
 /* ── Boot ────────────────────────────────────────────────── */
-(function init() {
-  loadAppData();
+(async function init() {
+  await loadAppData();
   render();
   registerServiceWorker();
   initPinLock();

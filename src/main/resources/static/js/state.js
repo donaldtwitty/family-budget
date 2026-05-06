@@ -16,10 +16,10 @@ let AppData = {};
 /* ── Load / Save ─────────────────────────────────────────── */
 
 /**
- * Loads AppData from localStorage with forward migration.
- * Handles older formats that used paid:{} instead of ledger:[].
+ * Loads AppData from localStorage, falling back to the server when empty.
+ * Returns a Promise so the caller can await before first render.
  */
-function loadAppData() {
+async function loadAppData() {
   try {
     const stored = localStorage.getItem(STORAGE_KEY);
     if (stored) {
@@ -28,8 +28,23 @@ function loadAppData() {
       return;
     }
   } catch (err) {
-    console.warn('Load failed, using defaults:', err);
+    console.warn('localStorage load failed:', err);
   }
+
+  // localStorage empty — try server
+  try {
+    const res = await fetch('/api/data');
+    if (res.ok) {
+      const json = await res.text();
+      AppData = JSON.parse(json);
+      _migrate();
+      localStorage.setItem(STORAGE_KEY, json);
+      return;
+    }
+  } catch (err) {
+    console.warn('Server fetch failed, using defaults:', err);
+  }
+
   AppData = {
     accounts: DEFAULT_ACCOUNTS.map((a) => ({ ...a })),
     bills:    DEFAULT_BILLS.map((b)    => ({ ...b })),
@@ -77,18 +92,24 @@ function _migrate() {
 let _saveTimer = null;
 
 /**
- * Persists AppData to localStorage. Debounced 150ms.
+ * Persists AppData to localStorage and syncs to server. Debounced 150ms.
  */
 function saveAppData() {
   clearTimeout(_saveTimer);
   _saveTimer = setTimeout(() => {
+    const json = JSON.stringify(AppData);
     try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(AppData));
+      localStorage.setItem(STORAGE_KEY, json);
       _flashSave('ok');
     } catch (err) {
       console.error('Save failed:', err);
       _flashSave('err');
     }
+    fetch('/api/data', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: json,
+    }).catch((err) => console.warn('Server sync failed:', err));
   }, 150);
 }
 
