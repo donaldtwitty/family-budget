@@ -34,12 +34,14 @@ async function loadAppData() {
   // localStorage empty — try server
   try {
     const res = await fetch('/api/data');
-    if (res.ok) {
+    if (res.status === 200) {
       const json = await res.text();
-      AppData = JSON.parse(json);
-      _migrate();
-      localStorage.setItem(STORAGE_KEY, json);
-      return;
+      if (json && json.trim().length > 0) {
+        AppData = JSON.parse(json);
+        _migrate();
+        localStorage.setItem(STORAGE_KEY, json);
+        return;
+      }
     }
   } catch (err) {
     console.warn('Server fetch failed, using defaults:', err);
