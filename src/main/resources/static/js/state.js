@@ -16,22 +16,12 @@ let AppData = {};
 /* ── Load / Save ─────────────────────────────────────────── */
 
 /**
- * Loads AppData from localStorage, falling back to the server when empty.
+ * Loads AppData from the server (source of truth for cross-device sync),
+ * falling back to localStorage if the server is unreachable, then defaults.
  * Returns a Promise so the caller can await before first render.
  */
 async function loadAppData() {
-  try {
-    const stored = localStorage.getItem(STORAGE_KEY);
-    if (stored) {
-      AppData = JSON.parse(stored);
-      _migrate();
-      return;
-    }
-  } catch (err) {
-    console.warn('localStorage load failed:', err);
-  }
-
-  // localStorage empty — try server
+  // Server is authoritative — always fetch so all devices stay in sync
   try {
     const res = await fetch('/api/data');
     if (res.status === 200) {
@@ -44,7 +34,19 @@ async function loadAppData() {
       }
     }
   } catch (err) {
-    console.warn('Server fetch failed, using defaults:', err);
+    console.warn('Server fetch failed, falling back to localStorage:', err);
+  }
+
+  // Server unavailable or empty — use localStorage as offline fallback
+  try {
+    const stored = localStorage.getItem(STORAGE_KEY);
+    if (stored) {
+      AppData = JSON.parse(stored);
+      _migrate();
+      return;
+    }
+  } catch (err) {
+    console.warn('localStorage load failed, using defaults:', err);
   }
 
   AppData = {
