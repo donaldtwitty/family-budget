@@ -1,241 +1,265 @@
 /**
- * state.js — Application state, server + localStorage persistence,
- * and derived totals. All mutation goes through these functions.
- *
- * CHANGES FROM ORIGINAL (localStorage-only):
- *  - loadAppData() is now async: tries the REST API first, falls back
- *    to localStorage, then falls back to seed defaults.
- *  - saveAppData() still writes to localStorage immediately (fast UI
- *    feedback) and also fires an async PUT /api/data in the background.
+ * state.js — Application state, localStorage persistence, and all
+ * derived balance/ledger calculations for the dual-account register.
  */
 
 /* eslint-disable no-unused-vars */
 
-const STORAGE_KEY = 'family-budget-v4';
+const STORAGE_KEY = 'family-budget-v5';
+const TODAY       = new Date();
+const TODAY_DAY   = TODAY.getDate();
+const MONTH_LABEL = TODAY.toLocaleString('en-US', { month: 'long', year: 'numeric' });
 
-/** Today's date (shared across the module) */
-const TODAY = new Date();
-
-/** The month currently being viewed — defaults to today, shifted by nav arrows */
-let viewDate = new Date(TODAY);
-
-function viewMonthKey() {
-  return `${viewDate.getFullYear()}-${String(viewDate.getMonth() + 1).padStart(2, '0')}`;
-}
-function viewMonthLabel() {
-  return viewDate.toLocaleString('en-US', { month: 'long', year: 'numeric' });
-}
-function viewDay() {
-  return isViewingCurrentMonth() ? TODAY.getDate() : 0;
-}
-function isViewingCurrentMonth() {
-  return viewDate.getFullYear() === TODAY.getFullYear() &&
-         viewDate.getMonth()    === TODAY.getMonth();
-}
-
-/** Shift the viewed month by delta (-1 or +1) */
-function shiftMonth(delta) {
-  viewDate = new Date(viewDate.getFullYear(), viewDate.getMonth() + delta, 1);
-}
-
-/**
- * The live application data object.
- * Shape: { bills, income, goals, debts, spending, paid }
- * @type {object}
- */
+/** @type {object} Live application data */
 let AppData = {};
-
-/* ── Seed defaults helper ────────────────────────────────── */
-function seedDefaults() {
-  return {
-    bills:    DEFAULT_BILLS.map((b) => ({ ...b })),
-    income:   DEFAULT_INCOME.map((i) => ({ ...i })),
-    goals:    DEFAULT_GOALS.map((g) => ({ ...g })),
-    debts:    DEFAULT_DEBTS.map((d) => ({ ...d })),
-    spending: [],
-    paid:     {},
-  };
-}
 
 /* ── Load / Save ─────────────────────────────────────────── */
 
 /**
- * Loads AppData from the REST API (server), falling back to
- * localStorage, then to seed defaults.
- *
- * This function is async. app.js calls it with await before rendering.
+ * Loads AppData from localStorage with forward migration.
+ * Handles older formats that used paid:{} instead of ledger:[].
  */
-async function loadAppData() {
-  // 1 — Try the server (source of truth in production)
-  try {
-    const serverData = await apiLoadData();
-    if (serverData) {
-      AppData = serverData;
-      if (!Array.isArray(AppData.spending)) AppData.spending = [];
-      // Keep localStorage in sync so the app works if the user goes offline
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(AppData));
-      return;
-    }
-  } catch (err) {
-    console.warn('[state] Server load error, trying localStorage.', err);
-  }
-
-  // 2 — Fall back to localStorage (offline / first-visit before server save)
+function loadAppData() {
   try {
     const stored = localStorage.getItem(STORAGE_KEY);
     if (stored) {
       AppData = JSON.parse(stored);
-      if (!Array.isArray(AppData.spending)) AppData.spending = [];
+      _migrate();
       return;
     }
   } catch (err) {
-    console.warn('[state] localStorage load failed, using defaults.', err);
+    console.warn('Load failed, using defaults:', err);
   }
-
-  // 3 — Brand-new install: seed from defaults
-  AppData = seedDefaults();
+  AppData = {
+    accounts: DEFAULT_ACCOUNTS.map((a) => ({ ...a })),
+    bills:    DEFAULT_BILLS.map((b)    => ({ ...b })),
+    income:   DEFAULT_INCOME.map((i)   => ({ ...i })),
+    goals:    DEFAULT_GOALS.map((g)    => ({ ...g })),
+    debts:    DEFAULT_DEBTS.map((d)    => ({ ...d })),
+    ledger:   [],
+  };
 }
 
-let saveTimer = null;
+/**
+ * Migrates older AppData shapes to the current schema.
+ * @private
+ */
+function _migrate() {
+  // Add accounts array if missing (upgrade from pre-dual-account)
+  if (!Array.isArray(AppData.accounts)) {
+    AppData.accounts = DEFAULT_ACCOUNTS.map((a) => ({ ...a }));
+  }
+  // Convert old paid:{} to empty ledger (data loss is unavoidable for old paid flags,
+  // but all financial amounts are preserved)
+  if (!Array.isArray(AppData.ledger)) {
+    AppData.ledger = [];
+  }
+  // Ensure all bills have an accountId
+  AppData.bills = (AppData.bills || []).map((b) => ({
+    ...b,
+    accountId: b.accountId || AppData.accounts[0].id,
+  }));
+  // Ensure all income sources have an accountId
+  AppData.income = (AppData.income || []).map((i) => ({
+    ...i,
+    accountId: i.accountId || AppData.accounts[0].id,
+  }));
+  // Ensure all ledger entries have accountId
+  AppData.ledger = AppData.ledger.map((e) => ({
+    ...e,
+    accountId: e.accountId || AppData.accounts[0].id,
+  }));
+  if (!Array.isArray(AppData.goals))  AppData.goals  = [];
+  if (!Array.isArray(AppData.debts))  AppData.debts  = [];
+  if (!Array.isArray(AppData.income)) AppData.income = [];
+}
+
+let _saveTimer = null;
 
 /**
- * Persists AppData:
- *  1. Immediately to localStorage (fast, synchronous)
- *  2. Asynchronously to the REST API (debounced 300 ms)
+ * Persists AppData to localStorage. Debounced 150ms.
  */
 function saveAppData() {
-  // Instant localStorage write so the UI never stalls
-  try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(AppData));
-  } catch (err) {
-    console.error('[state] localStorage write failed:', err);
-  }
-
-  // Debounced server sync
-  clearTimeout(saveTimer);
-  saveTimer = setTimeout(async () => {
+  clearTimeout(_saveTimer);
+  _saveTimer = setTimeout(() => {
     try {
-      await apiSaveData(AppData);
-      flashSave('ok');
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(AppData));
+      _flashSave('ok');
     } catch (err) {
-      console.error('[state] Server save failed:', err);
-      flashSave('err');
+      console.error('Save failed:', err);
+      _flashSave('err');
     }
-  }, 300);
+  }, 150);
 }
 
-/**
- * Shows a brief save confirmation in the header.
- * @param {'ok'|'err'} type
- */
-function flashSave(type) {
+/** @param {'ok'|'err'} type */
+function _flashSave(type) {
   const el = document.getElementById('savemsg');
   if (!el) return;
   el.textContent = type === 'ok' ? '✓ Saved' : '⚠ Save failed';
   el.className   = `save-msg ${type}`;
-  setTimeout(() => {
-    el.textContent = '';
-    el.className   = 'save-msg';
-  }, 1800);
+  setTimeout(() => { el.textContent = ''; el.className = 'save-msg'; }, 1800);
 }
 
-/* ── Paid Bill Tracking ──────────────────────────────────── */
+/* ── Ledger Mutations ────────────────────────────────────── */
 
-function getPaidSet() {
-  return new Set(AppData.paid[viewMonthKey()] || []);
-}
-
-function togglePaid(billId) {
-  const mk   = viewMonthKey();
-  const paid = getPaidSet();
-  if (paid.has(billId)) {
-    paid.delete(billId);
-  } else {
-    paid.add(billId);
-  }
-  AppData.paid[mk] = [...paid];
+/**
+ * Adds a transaction to the ledger and saves.
+ * @param {{ type: string, name: string, amount: number, date: string,
+ *           category: string, accountId: string, billId?: string,
+ *           incomeId?: string, note?: string }} entry
+ */
+function logTransaction(entry) {
+  AppData.ledger.push({
+    id:        uid(),
+    billId:    null,
+    incomeId:  null,
+    note:      '',
+    category:  '',
+    ...entry,
+  });
   saveAppData();
 }
 
 /**
- * Auto-marks autopay bills as paid once their due day has passed
- * in the current month. Only runs for the current month view.
- * Called once at boot and on each render.
+ * Removes a ledger entry by id.
+ * @param {string} id
  */
-function autoMarkAutopay() {
-  if (!isViewingCurrentMonth()) return;
-  const mk   = viewMonthKey();
-  const paid = getPaidSet();
-  const day  = TODAY.getDate();
-  let changed = false;
-
-  AppData.bills.forEach((b) => {
-    if (b.auto && b.day <= day && !paid.has(b.id)) {
-      paid.add(b.id);
-      changed = true;
-    }
-  });
-
-  if (changed) {
-    AppData.paid[mk] = [...paid];
-    saveAppData();
-  }
+function deleteTransaction(id) {
+  AppData.ledger = AppData.ledger.filter((e) => e.id !== id);
+  saveAppData();
 }
 
-/* ── Derived Totals ──────────────────────────────────────── */
+/* ── Bill Status ─────────────────────────────────────────── */
 
-function totalIncome() {
-  return AppData.income.reduce((sum, i) => sum + i.amount, 0);
-}
-
-function totalBills() {
-  return AppData.bills.reduce((sum, b) => sum + b.amount, 0);
+/**
+ * Determines the current status of a bill.
+ * @param {{ id: string, day: number }} bill
+ * @returns {'paid'|'pending'|'overdue'}
+ */
+function getBillStatus(bill) {
+  const cycleStart = getCycleStart(bill.day, TODAY);
+  const cycleStartISO = cycleStart.toISOString().slice(0, 10);
+  const paid = AppData.ledger.some(
+    (e) => e.type === 'bill' && e.billId === bill.id && e.date >= cycleStartISO
+  );
+  if (paid) return 'paid';
+  if (TODAY_DAY >= bill.day) return 'overdue';
+  return 'pending';
 }
 
 /**
- * Sum of only the bills marked as paid this month.
- * Used for the balance calculation — unpaid bills don't reduce
- * available money until the user confirms payment.
+ * Returns all bills that are pending or overdue for a given account.
+ * @param {string} accountId
+ * @returns {Array}
  */
-function totalPaidBills() {
-  const paid = getPaidSet();
+function pendingBills(accountId) {
   return AppData.bills
-    .filter((b) => paid.has(b.id))
+    .filter((b) => b.accountId === accountId)
+    .filter((b) => {
+      const status = getBillStatus(b);
+      return status === 'pending' || status === 'overdue';
+    })
+    .sort((a, b) => a.day - b.day);
+}
+
+/* ── Balance Calculations ────────────────────────────────── */
+
+/**
+ * Running balance for an account.
+ * Income adds; bills and expenses subtract.
+ * @param {string} accountId
+ * @returns {number}
+ */
+function realBalance(accountId) {
+  return AppData.ledger
+    .filter((e) => e.accountId === accountId)
+    .reduce((sum, e) => {
+      return e.type === 'income' ? sum + e.amount : sum - e.amount;
+    }, 0);
+}
+
+/**
+ * Safe to Spend = realBalance minus total of all unpaid pending/overdue bills.
+ * @param {string} accountId
+ * @returns {number}
+ */
+function safeToSpend(accountId) {
+  const balance  = realBalance(accountId);
+  const pending  = AppData.bills
+    .filter((b) => b.accountId === accountId)
+    .filter((b) => getBillStatus(b) !== 'paid')
     .reduce((sum, b) => sum + b.amount, 0);
+  return balance - pending;
 }
 
-function totalDebt() {
-  return AppData.debts.reduce((sum, d) => sum + d.balance, 0);
+/* ── Ledger Queries ──────────────────────────────────────── */
+
+/**
+ * All ledger entries sorted newest first.
+ * @returns {Array}
+ */
+function getSortedLedger() {
+  return [...AppData.ledger].sort(
+    (a, b) => b.date.localeCompare(a.date) || b.id.localeCompare(a.id)
+  );
 }
 
-function totalSaved() {
-  return AppData.goals.reduce((sum, g) => sum + g.saved, 0);
+/**
+ * Ledger with running balance appended to each entry, per account.
+ * Sorted oldest first for calculation, result reversed to newest first.
+ * @returns {Array<object>} entries with .runningBalance[accountId]
+ */
+function getRunningBalances() {
+  const sorted = [...AppData.ledger].sort(
+    (a, b) => a.date.localeCompare(b.date) || a.id.localeCompare(b.id)
+  );
+  const running = {};
+  AppData.accounts.forEach((acc) => { running[acc.id] = 0; });
+
+  const result = sorted.map((e) => {
+    if (e.type === 'income') {
+      running[e.accountId] = (running[e.accountId] || 0) + e.amount;
+    } else {
+      running[e.accountId] = (running[e.accountId] || 0) - e.amount;
+    }
+    return { ...e, runningBalance: { ...running } };
+  });
+
+  return result.reverse();
 }
 
-function totalSpent() {
-  const mk = viewMonthKey();
-  return AppData.spending
-    .filter((e) => e.date.startsWith(mk))
-    .reduce((sum, e) => sum + e.amount, 0);
-}
-
+/**
+ * Spending entries in the current calendar month.
+ * @returns {Array}
+ */
 function thisMonthSpending() {
-  const mk = viewMonthKey();
-  return AppData.spending
-    .filter((e) => e.date.startsWith(mk))
-    .sort((a, b) => b.date.localeCompare(a.date) || b.id.localeCompare(a.id));
+  const mk = `${TODAY.getFullYear()}-${String(TODAY.getMonth() + 1).padStart(2, '0')}`;
+  return AppData.ledger
+    .filter((e) => e.type === 'expense' && e.date.startsWith(mk))
+    .sort((a, b) => b.date.localeCompare(a.date));
 }
 
+/**
+ * Spending grouped by category for the current month.
+ * @returns {Array<{ name: string, emoji: string, total: number }>}
+ */
 function spendingByCategory() {
-  const mk  = viewMonthKey();
   const map = {};
-  AppData.spending
-    .filter((e) => e.date.startsWith(mk))
-    .forEach((e) => {
-      map[e.category] = (map[e.category] || 0) + e.amount;
-    });
-
+  thisMonthSpending().forEach((e) => {
+    map[e.category] = (map[e.category] || 0) + e.amount;
+  });
   return Object.entries(map)
     .map(([name, total]) => ({ name, emoji: spendEmoji(name), total }))
     .sort((a, b) => b.total - a.total);
+}
+
+/** @returns {number} */
+function totalSaved() {
+  return AppData.goals.reduce((s, g) => s + g.saved, 0);
+}
+
+/** @returns {number} */
+function totalDebt() {
+  return AppData.debts.reduce((s, d) => s + d.balance, 0);
 }

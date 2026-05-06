@@ -1,58 +1,50 @@
 /**
  * app.js — Application entry point.
- *
- * Responsibilities:
- *  - Initialize app state and register Service Worker
- *  - Control tab switching
- *  - Central click event delegator (all data-action routing)
- *  - Trigger renders
+ * Controls tab state and routes ALL click events via data-action delegation.
  */
 
-/* ── App UI state ─────────────────────────────────────────── */
+/* eslint-disable no-unused-vars */
+
+/* ── UI State ─────────────────────────────────────────────── */
 let currentTab   = 'home';
 let showIncome   = false;
 let activeFilter = 'All';
 let spendFilter  = 'All';
 
-/* ── Render orchestrator ─────────────────────────────────── */
+/* ── Render ──────────────────────────────────────────────── */
 
 /**
- * Re-renders the main content area and updates the header.
- * Called after any state mutation.
+ * Re-renders the active tab content and refreshes the header.
  */
 function render() {
-  autoMarkAutopay();
   updateHeader();
-
   const content = document.getElementById('content');
-
   switch (currentTab) {
-    case 'home':
-      content.innerHTML = renderHome(showIncome);
-      break;
-    case 'bills':
-      content.innerHTML = renderBills(showIncome, activeFilter);
-      break;
-    case 'spend':
-      content.innerHTML = renderSpend(spendFilter);
-      break;
-    case 'goals':
-      content.innerHTML = renderGoals();
-      break;
-    case 'debts':
-      content.innerHTML = renderDebts();
-      break;
-    default:
-      content.innerHTML = '';
+    case 'home':   content.innerHTML = renderHome(showIncome);           break;
+    case 'bills':  content.innerHTML = renderBills(showIncome, activeFilter); break;
+    case 'spend':  content.innerHTML = renderSpend(spendFilter);         break;
+    case 'goals':  content.innerHTML = renderGoals();                    break;
+    case 'debts':  content.innerHTML = renderDebts();                    break;
+    default:       content.innerHTML = '';
   }
-
   applyDynamicStyles();
+  _applyAccountColors();
 }
 
-/* ── Tab switching ───────────────────────────────────────── */
+/**
+ * Applies account accent colors to all [data-acc-id] elements.
+ * This is the only place dynamic color is applied — never inline style in HTML.
+ */
+function _applyAccountColors() {
+  document.querySelectorAll('[data-acc-id]').forEach((el) => {
+    const acc = AppData.accounts.find((a) => a.id === el.dataset.accId);
+    if (acc) el.style.setProperty('--acc-color', acc.color);
+  });
+}
+
+/* ── Tab Switching ───────────────────────────────────────── */
 
 /**
- * Switches the active tab and re-renders content.
  * @param {string} tab
  */
 function setTab(tab) {
@@ -62,56 +54,64 @@ function setTab(tab) {
   spendFilter  = 'All';
 
   document.querySelectorAll('.nav-tab').forEach((btn) => {
-    const isActive = btn.dataset.tab === tab;
-    btn.classList.toggle('active', isActive);
-    btn.setAttribute('aria-current', isActive ? 'page' : 'false');
+    const active = btn.dataset.tab === tab;
+    btn.classList.toggle('active', active);
+    btn.setAttribute('aria-current', active ? 'page' : 'false');
   });
 
   render();
   window.scrollTo({ top: 0, behavior: 'smooth' });
 }
 
-/* ── Income toggle ───────────────────────────────────────── */
-function toggleIncome() {
-  showIncome = !showIncome;
-  render();
-}
+/* ── Central Click Delegator ─────────────────────────────── */
 
-/* ── Category filters ────────────────────────────────────── */
-/** @param {string} filter */
-function setFilter(filter) {
-  activeFilter = filter;
-  render();
-}
-
-/** @param {string} filter */
-function setSpendFilter(filter) {
-  spendFilter = filter;
-  render();
-}
-
-/* ── Central click event delegator ──────────────────────── */
 document.addEventListener('click', (event) => {
   const target = event.target.closest('[data-action]');
   if (!target) return;
 
-  const action = target.dataset.action;
-  const id     = target.dataset.id     || null;
-  const editId = target.dataset.editId || null;
-  const tab    = target.dataset.tab    || null;
-  const filter = target.dataset.filter || null;
-  const cat    = target.dataset.cat    || null;
+  const action   = target.dataset.action;
+  const id       = target.dataset.id       || null;
+  const editId   = target.dataset.editId   || null;
+  const tab      = target.dataset.tab      || null;
+  const filter   = target.dataset.filter   || null;
+  const cat      = target.dataset.cat      || null;
+  const billId   = target.dataset.billId   || null;
+  const incomeId = target.dataset.incomeId || null;
 
   switch (action) {
 
     // ── Navigation ─────────────────────────────────────────
-    case 'set-tab':
-      setTab(tab);
+    case 'set-tab': setTab(tab); break;
+
+    // ── Home ───────────────────────────────────────────────
+    case 'show-log-income':
+      showIncome = !showIncome;
+      render();
+      break;
+    case 'log-income-source':
+      showLogIncomeConfirm(id);
+      break;
+    case 'log-income-manual':
+      showLogIncomeManual();
+      break;
+    case 'save-income-entry':
+      saveIncomeEntry(target.dataset.incomeId);
+      render();
+      break;
+    case 'save-income-manual':
+      saveIncomeManual();
+      render();
+      break;
+    case 'show-register':
+      showRegisterModal();
       break;
 
-    // ── Bill actions ───────────────────────────────────────
-    case 'toggle-paid':
-      togglePaid(id);
+    // ── Bills ──────────────────────────────────────────────
+    case 'pay-bill':
+      showPayBillModal(id);
+      break;
+    case 'save-bill-payment':
+      saveBillPayment(target.dataset.billId);
       render();
       break;
     case 'add-bill':
@@ -129,7 +129,23 @@ document.addEventListener('click', (event) => {
       render();
       break;
 
-    // ── Expense / Spending actions ─────────────────────────
+    // ── Income Templates ───────────────────────────────────
+    case 'add-income':
+      showIncomeForm(null);
+      break;
+    case 'edit-income':
+      showIncomeForm(id);
+      break;
+    case 'del-income':
+      deleteIncome(id);
+      render();
+      break;
+    case 'save-income-template':
+      saveIncomeTemplate(editId);
+      render();
+      break;
+
+    // ── Spending ───────────────────────────────────────────
     case 'add-expense':
       showExpenseForm();
       break;
@@ -140,22 +156,16 @@ document.addEventListener('click', (event) => {
       saveExpense();
       render();
       break;
-    case 'edit-expense':
-      showEditExpenseForm(id);
-      break;
-    case 'save-edit-expense':
-      saveEditExpense(editId);
-      render();
-      break;
-    case 'del-expense':
-      deleteExpense(id);
+    case 'del-transaction':
+      deleteTransaction(id);
       render();
       break;
     case 'set-spend-filter':
-      setSpendFilter(filter);
+      spendFilter = filter;
+      render();
       break;
 
-    // ── Receipt scanning ───────────────────────────────────
+    // ── Receipt Scanning ───────────────────────────────────
     case 'start-receipt-scan':
       startReceiptScan();
       break;
@@ -169,10 +179,7 @@ document.addEventListener('click', (event) => {
       openGallery();
       break;
     case 'open-gallery-direct':
-      (function () {
-        const gal = document.getElementById('receipt-gallery');
-        if (gal) gal.click();
-      }());
+      document.getElementById('receipt-gallery')?.click();
       break;
     case 'save-api-key':
       saveApiKeyAndContinue();
@@ -184,7 +191,7 @@ document.addEventListener('click', (event) => {
       showApiKeyModal();
       break;
 
-    // ── Goal actions ───────────────────────────────────────
+    // ── Goals ──────────────────────────────────────────────
     case 'add-goal':
       showGoalForm(null);
       break;
@@ -207,7 +214,7 @@ document.addEventListener('click', (event) => {
       render();
       break;
 
-    // ── Debt actions ───────────────────────────────────────
+    // ── Debts ──────────────────────────────────────────────
     case 'add-debt':
       showDebtForm(null);
       break;
@@ -223,57 +230,20 @@ document.addEventListener('click', (event) => {
       render();
       break;
 
-    // ── Income actions ─────────────────────────────────────
-    case 'add-income':
-      showIncomeForm(null);
-      break;
-    case 'edit-income':
-      showIncomeForm(id);
-      break;
-    case 'del-income':
-      deleteIncome(id);
-      render();
-      break;
-    case 'save-income':
-      saveIncome(editId);
-      render();
-      break;
-
-    // ── UI controls ────────────────────────────────────────
+    // ── Filters ────────────────────────────────────────────
     case 'toggle-inc':
-      toggleIncome();
+      showIncome = !showIncome;
+      render();
       break;
     case 'set-filter':
-      setFilter(filter);
-      break;
-    case 'prev-month':
-      shiftMonth(-1);
-      render();
-      break;
-    case 'next-month':
-      shiftMonth(1);
+      activeFilter = filter;
       render();
       break;
     case 'hide-modal':
       hideModal();
       break;
 
-    // ── Sync & install ─────────────────────────────────────
-    case 'show-sync':
-      showSyncModal();
-      break;
-    case 'show-install':
-      showInstallModal();
-      break;
-    case 'copy-code':
-      copyExportCode();
-      break;
-    case 'import-data':
-      importData();
-      render();
-      break;
-
-    // ── PIN lock ───────────────────────────────────────────
+    // ── PIN ────────────────────────────────────────────────
     case 'show-pin-settings':
       showPinSettings();
       break;
@@ -289,34 +259,47 @@ document.addEventListener('click', (event) => {
       resetPin();
       break;
 
+    // ── Sync & Install ─────────────────────────────────────
+    case 'show-sync':
+      showSyncModal();
+      break;
+    case 'show-install':
+      showInstallModal();
+      break;
+    case 'copy-code':
+      copyExportCode();
+      break;
+    case 'import-data':
+      importData();
+      render();
+      break;
+
     default:
       console.warn(`Unhandled action: "${action}"`);
   }
 });
 
-/* ── Close modal on backdrop click ──────────────────────── */
-document.getElementById('overlay').addEventListener('click', (event) => {
-  if (event.target === event.currentTarget) hideModal();
+/* ── Modal close handlers ────────────────────────────────── */
+document.getElementById('overlay').addEventListener('click', (e) => {
+  if (e.target === e.currentTarget) hideModal();
 });
-
-/* ── Close modal on Escape ───────────────────────────────── */
-document.addEventListener('keydown', (event) => {
-  if (event.key === 'Escape') hideModal();
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape') hideModal();
 });
 
 /* ── Service Worker ──────────────────────────────────────── */
 function registerServiceWorker() {
   if ('serviceWorker' in navigator) {
-    navigator.serviceWorker.register('./sw.js').catch((err) => {
-      console.warn('Service Worker registration failed:', err);
-    });
+    navigator.serviceWorker.register('./sw.js').catch((err) =>
+      console.warn('SW registration failed:', err)
+    );
   }
 }
 
 /* ── Boot ────────────────────────────────────────────────── */
-(async function init() {
-  await loadAppData();
+(function init() {
+  loadAppData();
   render();
   registerServiceWorker();
   initPinLock();
-})();
+}());

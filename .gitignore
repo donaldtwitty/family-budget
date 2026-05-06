@@ -6,6 +6,7 @@ target/
 
 # ── IDE ────────────────────────────────────────────────────
 .idea/
+.claude/
 *.iml
 *.iws
 .classpath

@@ -1,12 +1,12 @@
 {
   "name": "Family Budget",
   "short_name": "Budget",
-  "description": "Family budget tracker with bills, goals, and debt tracking",
+  "description": "Dual-account family budget tracker with running ledger",
   "start_url": "./index.html",
   "display": "standalone",
-  "background_color": "#f2f4f0",
-  "theme_color": "#1b4332",
   "orientation": "portrait",
+  "background_color": "#1b4332",
+  "theme_color": "#1b4332",
   "icons": [
     {
       "src": "icons/icon.svg",

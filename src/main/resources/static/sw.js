@@ -1,12 +1,16 @@
-const CACHE_NAME = 'family-budget-v2';
+/**
+ * sw.js — Service worker for offline caching.
+ * Caches all app shell files on install; serves from cache first.
+ */
 
-// Static assets that are safe to serve from cache while offline.
-// Any JS file added to the app MUST also be listed here.
-const ASSETS_TO_CACHE = [
+const CACHE_NAME = 'family-budget-v5';
+
+const ASSETS = [
+  './',
   './index.html',
   './manifest.json',
+  './icons/icon.svg',
   './css/styles.css',
-  './js/api.js',       // ← REST client (must come before state.js)
   './js/data.js',
   './js/utils.js',
   './js/state.js',
@@ -15,13 +19,12 @@ const ASSETS_TO_CACHE = [
   './js/receipt.js',
   './js/pin.js',
   './js/app.js',
-  './icons/icon.svg',
   'https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,600;9..40,700&display=swap',
 ];
 
 self.addEventListener('install', (event) => {
   event.waitUntil(
-    caches.open(CACHE_NAME).then((cache) => cache.addAll(ASSETS_TO_CACHE))
+    caches.open(CACHE_NAME).then((cache) => cache.addAll(ASSETS))
   );
   self.skipWaiting();
 });
@@ -36,24 +39,12 @@ self.addEventListener('activate', (event) => {
 });
 
 self.addEventListener('fetch', (event) => {
-  const url = new URL(event.request.url);
+  // Let Anthropic API calls go straight to network — never cache them
+  if (event.request.url.includes('anthropic.com')) return;
 
-  // ── Network-first for all API calls ───────────────────────────────────────
-  // API responses must always reflect the latest server state. We only fall
-  // back to cache when the network is completely unreachable (full offline).
-  if (url.pathname.startsWith('/api/')) {
-    event.respondWith(
-      fetch(event.request)
-        .catch(() => caches.match(event.request))
-    );
-    return;
-  }
-
-  // ── Cache-first for static assets ─────────────────────────────────────────
-  // HTML, CSS, JS, fonts and icons are versioned by CACHE_NAME. They are safe
-  // to serve from cache; the network is only hit when a file isn't cached yet.
   event.respondWith(
-    caches.match(event.request)
-      .then((cached) => cached || fetch(event.request))
+    caches.match(event.request).then((cached) =>
+      cached || fetch(event.request).catch(() => caches.match('./index.html'))
+    )
   );
 });

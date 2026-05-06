@@ -19,6 +19,7 @@
 </head>
 <body>
 
+  <!-- ── Sticky Header ── -->
   <header id="hdr">
     <div class="hdr-top">
       <div class="hdr-branding">
@@ -27,37 +28,19 @@
       </div>
       <div class="hdr-right">
         <p class="save-msg" id="savemsg" aria-live="polite"></p>
-        <p class="income-label">Monthly Income</p>
-        <p class="income-value" id="hinc"></p>
       </div>
     </div>
 
-    <div class="balance-card">
-      <p class="balance-label">Monthly Balance</p>
-      <p class="balance-amount" id="hbal"></p>
-      <div class="balance-stats">
-        <div class="balance-stat">
-          <p class="stat-label">Bills</p>
-          <p class="stat-value" id="hbills"></p>
-        </div>
-        <div class="balance-stat">
-          <p class="stat-label">Spent</p>
-          <p class="stat-value" id="hspent"></p>
-        </div>
-        <div class="balance-stat">
-          <p class="stat-label">Debt</p>
-          <p class="stat-value" id="hdebt"></p>
-        </div>
-        <div class="balance-stat">
-          <p class="stat-label">Goals</p>
-          <p class="stat-value" id="hgoals"></p>
-        </div>
-      </div>
+    <!-- Dual account cards populated by updateHeader() in render.js -->
+    <div class="account-cards" id="account-cards">
+      <!-- Injected at runtime for each account in AppData.accounts -->
     </div>
   </header>
 
+  <!-- ── Tab Content ── -->
   <main id="content"></main>
 
+  <!-- ── Bottom Navigation ── -->
   <nav id="nav" aria-label="Main navigation">
     <button class="nav-tab active" data-action="set-tab" data-tab="home" aria-current="page">
       <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
@@ -88,7 +71,8 @@
 
     <button class="nav-tab" data-action="set-tab" data-tab="goals">
       <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
-        <circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/>
+        <circle cx="12" cy="12" r="10"/>
+        <circle cx="12" cy="12" r="6"/>
         <circle cx="12" cy="12" r="2"/>
       </svg>
       <span>Goals</span>
@@ -103,25 +87,20 @@
     </button>
   </nav>
 
+  <!-- ── Bottom Sheet Modal ── -->
   <div id="overlay" role="dialog" aria-modal="true" aria-hidden="true">
     <div class="sheet" role="document">
       <div class="sheet-header">
         <h2 class="sheet-title" id="sh-ttl"></h2>
-        <button class="sheet-close" data-action="hide-modal" aria-label="Close dialog">✕</button>
+        <button class="sheet-close" data-action="hide-modal" aria-label="Close">✕</button>
       </div>
       <div class="sheet-body" id="sh-body"></div>
     </div>
   </div>
 
-  <!--
-    Script load order (dependency chain):
-      data  → utils → api → state → render → modals → receipt → pin → app
-    api.js is new — it must load before state.js so apiLoadData / apiSaveData
-    are available when loadAppData() runs.
-  -->
+  <!-- ── Scripts (dependency order) ── -->
   <script src="js/data.js"></script>
   <script src="js/utils.js"></script>
-  <script src="js/api.js"></script>
   <script src="js/state.js"></script>
   <script src="js/render.js"></script>
   <script src="js/modals.js"></script>
