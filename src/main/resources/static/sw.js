@@ -3,7 +3,7 @@
  * Caches all app shell files on install; serves from cache first.
  */
 
-const CACHE_NAME = 'family-budget-v5';
+const CACHE_NAME = 'family-budget-v6';
 
 const ASSETS = [
   './',
@@ -39,8 +39,9 @@ self.addEventListener('activate', (event) => {
 });
 
 self.addEventListener('fetch', (event) => {
-  // Let Anthropic API calls go straight to network — never cache them
-  if (event.request.url.includes('anthropic.com')) return;
+  // Never cache API or Anthropic calls — always go to network
+  if (event.request.url.includes('anthropic.com') ||
+      event.request.url.includes('/api/')) return;
 
   event.respondWith(
     caches.match(event.request).then((cached) =>
