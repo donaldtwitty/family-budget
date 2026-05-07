@@ -107,6 +107,7 @@ function spendEmoji(name) {
  * @returns {string}
  */
 function catClass(cat) {
+  if (!cat) return 'cat-other';
   return `cat-${cat.toLowerCase().replace(/\s+/g, '-')}`;
 }
 

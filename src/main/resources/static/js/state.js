@@ -73,10 +73,12 @@ function _migrate() {
   if (!Array.isArray(AppData.ledger)) {
     AppData.ledger = [];
   }
-  // Ensure all bills have an accountId
+  // Ensure all bills have required fields
   AppData.bills = (AppData.bills || []).map((b) => ({
     ...b,
     accountId: b.accountId || AppData.accounts[0].id,
+    cat:       b.cat  || 'Other',
+    day:       parseInt(b.day, 10) || 1,
   }));
   // Ensure all income sources have an accountId
   AppData.income = (AppData.income || []).map((i) => ({

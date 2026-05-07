@@ -95,7 +95,7 @@ function renderBillRow(bill, status, showEdit) {
           ${bill.auto ? '<span class="auto-badge">AUTO</span>' : ''}
         </div>
         <div class="bill-meta">
-          <span class="cat-badge ${catClass(bill.cat)}">${esc(bill.cat)}</span>
+          <span class="cat-badge ${catClass(bill.cat)}">${esc(bill.cat || 'Other')}</span>
           <span class="due-text">Due ${ord(bill.day)}</span>
           <span class="acc-tag" data-acc-id="${esc(acc.id)}">${esc(acc.name)}</span>
         </div>
