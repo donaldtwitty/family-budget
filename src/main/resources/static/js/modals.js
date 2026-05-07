@@ -561,7 +561,49 @@ function showSyncModal() {
     <div><label class="form-label" for="f-import">Import Code</label><textarea id="f-import" class="form-input form-input--mono" placeholder="Paste the export code here…"></textarea></div>
     <button class="btn btn--primary" data-action="import-data">⬇️ Import &amp; Sync</button>
     <p class="sync-note">⚠ Importing replaces all data on this phone</p>
+    <hr class="sync-divider" />
+    <p class="danger-zone-label">⚠ Danger Zone</p>
+    <button class="btn btn--outline-red" data-action="show-reset-confirm">🗑 Reset All Data…</button>
   `);
+}
+
+/* ── Reset All Data ──────────────────────────────────────── */
+
+function showResetConfirm() {
+  showModal('Reset All Data', `
+    <div class="info-panel info-panel--yellow">
+      <strong>⚠ This cannot be undone.</strong><br>
+      Every transaction, bill, income source, account, goal, and debt will be permanently deleted from this device and the server.
+    </div>
+    <div>
+      <label class="form-label" for="f-reset-confirm">Type <strong>RESET</strong> to confirm</label>
+      <input id="f-reset-confirm" class="form-input" type="text" placeholder="RESET"
+             autocomplete="off" autocorrect="off" autocapitalize="none" spellcheck="false" />
+    </div>
+    <button class="btn btn--outline-red" data-action="confirm-reset-data">🗑 Delete Everything</button>
+    <button class="btn btn--subtle" data-action="hide-modal">Cancel</button>
+  `);
+}
+
+function confirmResetData() {
+  if (val('f-reset-confirm') !== 'RESET') {
+    alert('Please type RESET (all caps) to confirm.');
+    return;
+  }
+
+  AppData = {
+    accounts: DEFAULT_ACCOUNTS.map((a) => ({ ...a })),
+    bills:    DEFAULT_BILLS.map((b)    => ({ ...b })),
+    income:   DEFAULT_INCOME.map((i)   => ({ ...i })),
+    goals:    DEFAULT_GOALS.map((g)    => ({ ...g })),
+    debts:    DEFAULT_DEBTS.map((d)    => ({ ...d })),
+    ledger:   [],
+  };
+
+  try { localStorage.removeItem(STORAGE_KEY); } catch { /* ignore */ }
+  saveAppData();
+  hideModal();
+  render();
 }
 
 function copyExportCode() {

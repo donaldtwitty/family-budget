@@ -676,6 +676,9 @@ button { font-family: var(--font-body); cursor: pointer; }
 .pin-toast { position: fixed; bottom: 100px; left: 50%; transform: translateX(-50%) translateY(12px); background: var(--green-900); color: var(--white); padding: 10px 20px; border-radius: var(--radius-full); font-size: 14px; font-weight: 600; opacity: 0; transition: opacity .25s, transform .25s; z-index: 9999; white-space: nowrap; box-shadow: var(--shadow-md); }
 .pin-toast--visible { opacity: 1; transform: translateX(-50%) translateY(0); }
 
+/* ── Danger Zone ───────────────────────────────────────────── */
+.danger-zone-label { font-size: 12px; font-weight: 700; color: var(--red-600); text-transform: uppercase; letter-spacing: .05em; margin-bottom: -4px; }
+
 /* ── Section Headings & Misc ────────────────────────────────── */
 .section-heading { font-size: 13px; font-weight: 700; color: var(--text-secondary); margin-bottom: 8px; }
 .empty-state     { text-align: center; color: var(--text-faint); font-size: 14px; padding: 20px; background: var(--white); border-radius: var(--radius-lg); box-shadow: var(--shadow-sm); }

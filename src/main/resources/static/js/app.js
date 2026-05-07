@@ -274,6 +274,12 @@ document.addEventListener('click', (event) => {
     case 'show-sync':
       showSyncModal();
       break;
+    case 'show-reset-confirm':
+      showResetConfirm();
+      break;
+    case 'confirm-reset-data':
+      confirmResetData();
+      break;
     case 'show-install':
       showInstallModal();
       break;
