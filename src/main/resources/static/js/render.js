@@ -257,10 +257,11 @@ function renderBills(showIncome, activeFilter) {
 
 /** @param {string} spendFilter @returns {string} */
 function renderSpend(spendFilter) {
-  const entries      = thisMonthSpending();
-  const catBreakdown = spendingByCategory();
-  const maxTotal     = catBreakdown.length ? catBreakdown[0].total : 1;
-  const filtered     = spendFilter === 'All' ? entries : entries.filter((e) => e.category === spendFilter);
+  const entries       = thisMonthSpending();
+  const incomeEntries = thisMonthIncome();
+  const catBreakdown  = spendingByCategory();
+  const maxTotal      = catBreakdown.length ? catBreakdown[0].total : 1;
+  const filtered      = spendFilter === 'All' ? entries : entries.filter((e) => e.category === spendFilter);
 
   const groups = {};
   filtered.forEach((e) => { if (!groups[e.date]) groups[e.date] = []; groups[e.date].push(e); });
@@ -287,6 +288,11 @@ function renderSpend(spendFilter) {
       `).join('')
     : '<div class="empty-state">No expenses logged this month yet 👍</div>';
 
+  const incomeRows = incomeEntries.length ? `
+    <p class="section-heading mt-6">💵 Income This Month</p>
+    <div class="income-this-month">${incomeEntries.map((e) => renderLedgerRow(e, false)).join('')}</div>
+  ` : '';
+
   return `
     <div class="hero hero--green">
       <p class="hero__label">Spent This Month</p>
@@ -302,7 +308,8 @@ function renderSpend(spendFilter) {
     </div>
     ${catBreakdown.length ? `<p class="section-heading mt-6">📊 This Month by Category</p><div class="card">${catBars}</div>` : ''}
     <div class="chips mt-6">${chips}</div>
-    ${txRows}`;
+    ${txRows}
+    ${incomeRows}`;
 }
 
 /* ── Goals Tab ───────────────────────────────────────────── */

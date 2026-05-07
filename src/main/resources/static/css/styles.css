@@ -861,6 +861,19 @@ button { font-family: var(--font-body); cursor: pointer; }
 /* Duplicate badge in the info panel */
 .import-dup-badge { color: var(--amber-800); font-weight: 600; }
 
+/* Bill / income match badges in preview table */
+.import-match-badge {
+  display: inline-block;
+  margin-top: 3px;
+  padding: 1px 6px;
+  border-radius: 10px;
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1.5;
+}
+.import-match-badge--bill   { background: #d1fae5; color: #065f46; }
+.import-match-badge--income { background: #dbeafe; color: #1e40af; }
+
 /* ── Utility ───────────────────────────────────────────────── */
 .mt-4  { margin-top: 4px; }
 .mt-6  { margin-top: 6px; }

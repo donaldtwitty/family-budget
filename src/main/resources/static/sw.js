@@ -3,7 +3,7 @@
  * Caches all app shell files on install; serves from cache first.
  */
 
-const CACHE_NAME = 'family-budget-v8';
+const CACHE_NAME = 'family-budget-v9';
 
 const ASSETS = [
   './',

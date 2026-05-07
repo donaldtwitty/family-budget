@@ -103,7 +103,7 @@ function _readFileAsText(file) {
 /**
  * Sends raw CSV text to Claude, which returns a JSON array of transactions.
  * @param {string} csvText
- * @returns {Promise<Array<{date:string,description:string,amount:number,type:string,category:string}>>}
+ * @returns {Promise<Array<{date:string,description:string,amount:number,type:string,category:string,billName:string|null,incomeSource:string|null}>>}
  */
 async function _parseWithClaude(csvText) {
   const apiKey = getApiKey();
@@ -113,10 +113,13 @@ async function _parseWithClaude(csvText) {
   const lines  = csvText.split('\n');
   const sample = lines.slice(0, 251).join('\n');
 
-  const catNames = SPENDING_CATEGORIES.map((c) => c.name).join(', ');
+  const catNames    = SPENDING_CATEGORIES.map((c) => c.name).join(', ');
+  const billList    = AppData.bills.map((b) => b.name).join(', ');
+  const incomeList  = AppData.income.map((i) => i.name).join(', ');
+
   const prompt = `You are a bank statement parser. Parse the CSV bank statement below and return ONLY a JSON array — no explanation, no markdown fences.
 
-Each element: { "date": "YYYY-MM-DD", "description": "Merchant name (max 40 chars)", "amount": 0.00, "type": "expense" or "income", "category": "..." }
+Each element: { "date": "YYYY-MM-DD", "description": "Merchant name (max 40 chars)", "amount": 0.00, "type": "expense" or "income", "category": "...", "billName": null, "incomeSource": null }
 
 Rules:
 - date: convert any date format to YYYY-MM-DD
@@ -124,6 +127,8 @@ Rules:
 - amount: always a positive number regardless of sign in the CSV
 - type: "income" for deposits / credits / payroll; "expense" for debits / purchases / payments / transfers out
 - category: the single best match from this list (use exact spelling): ${catNames}
+- billName: if this is a payment that matches one of these known bills (fuzzy match on name), return the EXACT bill name from this list — otherwise null. Bills: ${billList}
+- incomeSource: if this is income that matches one of these known sources (fuzzy match on name), return the EXACT source name from this list — otherwise null. Income sources: ${incomeList}
 - Skip header rows, beginning/ending balance rows, and rows without a dollar amount
 
 CSV data:
@@ -183,6 +188,11 @@ function _showImportPreview(transactions, accountId) {
     const catOpts = SPENDING_CATEGORIES.map((c) =>
       `<option value="${esc(c.name)}"${c.name === t.category ? ' selected' : ''}>${esc(c.emoji)} ${esc(c.name)}</option>`
     ).join('');
+    const matchBadge = t.billName
+      ? `<span class="import-match-badge import-match-badge--bill">🔗 ${esc(t.billName)}</span>`
+      : t.incomeSource
+        ? `<span class="import-match-badge import-match-badge--income">💵 ${esc(t.incomeSource)}</span>`
+        : '';
     return `
       <tr class="${t.dup ? 'import-row--dup' : ''}">
         <td class="import-td-cb">
@@ -192,6 +202,7 @@ function _showImportPreview(transactions, accountId) {
         <td class="import-td-date">${esc(t.date)}</td>
         <td class="import-td-desc">
           <input class="import-desc" data-idx="${i}" type="text" value="${esc(t.description)}" autocomplete="off" />
+          ${matchBadge}
         </td>
         <td class="import-td-cat">
           <select class="import-cat" data-idx="${i}">${catOpts}</select>
@@ -263,14 +274,19 @@ function confirmCsvImport() {
     const desc = document.querySelector(`.import-desc[data-idx="${i}"]`);
     const cat  = document.querySelector(`.import-cat[data-idx="${i}"]`);
 
+    const matchedBill   = t.billName     ? AppData.bills.find((b)  => b.name  === t.billName)     : null;
+    const matchedIncome = t.incomeSource ? AppData.income.find((i) => i.name  === t.incomeSource) : null;
+
     logTransaction({
-      type:      t.type,
-      name:      desc ? (desc.value.trim() || t.description) : t.description,
-      amount:    t.amount,
-      date:      t.date,
-      category:  cat ? cat.value : t.category,
+      type:       matchedBill ? 'bill' : t.type,
+      name:       desc ? (desc.value.trim() || t.description) : t.description,
+      amount:     t.amount,
+      date:       t.date,
+      category:   cat ? cat.value : t.category,
       accountId,
-      note:      'imported',
+      billId:     matchedBill?.id   || null,
+      incomeId:   matchedIncome?.id || null,
+      note:       'imported',
     });
     count++;
   });

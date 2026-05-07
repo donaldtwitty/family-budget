@@ -266,6 +266,17 @@ function thisMonthSpending() {
 }
 
 /**
+ * Income entries in the current calendar month.
+ * @returns {Array}
+ */
+function thisMonthIncome() {
+  const mk = `${TODAY.getFullYear()}-${String(TODAY.getMonth() + 1).padStart(2, '0')}`;
+  return AppData.ledger
+    .filter((e) => e.type === 'income' && e.date.startsWith(mk))
+    .sort((a, b) => b.date.localeCompare(a.date));
+}
+
+/**
  * Spending grouped by category for the current month.
  * @returns {Array<{ name: string, emoji: string, total: number }>}
  */
