@@ -140,14 +140,15 @@ function calcPayoff(debt, fromDate) {
  * @returns {Date}
  */
 function getCycleStart(dueDay, fromDate) {
+  const day   = Math.max(1, Math.min(31, parseInt(dueDay, 10) || 1));
   const d     = new Date(fromDate);
   const today = d.getDate();
-  if (today >= dueDay) {
-    return new Date(d.getFullYear(), d.getMonth(), dueDay);
+  if (today >= day) {
+    return new Date(d.getFullYear(), d.getMonth(), day);
   }
-  const prev = new Date(d.getFullYear(), d.getMonth() - 1, 1);
+  const prev    = new Date(d.getFullYear(), d.getMonth() - 1, 1);
   const lastDay = new Date(d.getFullYear(), d.getMonth(), 0).getDate();
-  return new Date(prev.getFullYear(), prev.getMonth(), Math.min(dueDay, lastDay));
+  return new Date(prev.getFullYear(), prev.getMonth(), Math.min(day, lastDay));
 }
 
 /* ── SVG Icon strings ─────────────────────────────────────── */

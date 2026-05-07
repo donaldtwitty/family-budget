@@ -163,7 +163,9 @@ function deleteTransaction(id) {
  * @returns {'paid'|'pending'|'overdue'}
  */
 function getBillStatus(bill) {
-  const cycleStart = getCycleStart(bill.day, TODAY);
+  const day = parseInt(bill.day, 10);
+  if (!day || day < 1 || day > 31) return 'pending';
+  const cycleStart = getCycleStart(day, TODAY);
   const cycleStartISO = cycleStart.toISOString().slice(0, 10);
   const paid = AppData.ledger.some(
     (e) => e.type === 'bill' && e.billId === bill.id && e.date >= cycleStartISO
