@@ -100,4 +100,15 @@ class BudgetServiceTest {
         // Repository should never be touched when input is invalid
         verifyNoInteractions(repo);
     }
+
+    @Test
+    @DisplayName("saveData accepts a minimal non-blank payload like an empty JSON object")
+    void saveData_acceptsMinimalNonBlankPayload() {
+        when(repo.findByHouseholdId(HOUSEHOLD)).thenReturn(Optional.empty());
+        when(repo.save(any())).thenAnswer(inv -> inv.getArgument(0));
+
+        // "{}" is non-blank — service should accept it without throwing
+        assertThatCode(() -> service.saveData("{}")).doesNotThrowAnyException();
+        verify(repo).save(any());
+    }
 }

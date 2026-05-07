@@ -90,4 +90,56 @@ class BudgetControllerTest {
                    .content("{}"))
                .andExpect(status().isBadRequest());
     }
+
+    @Test
+    @DisplayName("PUT /api/data error response has correct JSON shape: timestamp, status, error, message")
+    void saveData_errorResponseBodyHasCorrectShape() throws Exception {
+        doThrow(new IllegalArgumentException("AppData payload must not be empty"))
+            .when(budgetService).saveData(anyString());
+
+        mockMvc.perform(put("/api/data")
+                   .contentType(MediaType.APPLICATION_JSON)
+                   .content("{}"))
+               .andExpect(status().isBadRequest())
+               .andExpect(jsonPath("$.status").value(400))
+               .andExpect(jsonPath("$.error").value("Bad Request"))
+               .andExpect(jsonPath("$.message").value("AppData payload must not be empty"))
+               .andExpect(jsonPath("$.timestamp").exists());
+    }
+
+    @Test
+    @DisplayName("PUT /api/data with wrong Content-Type returns 415 Unsupported Media Type")
+    void saveData_wrongContentType_returns415() throws Exception {
+        mockMvc.perform(put("/api/data")
+                   .contentType(MediaType.TEXT_PLAIN)
+                   .content("some text"))
+               .andExpect(status().isUnsupportedMediaType());
+    }
+
+    @Test
+    @DisplayName("POST /api/data (wrong HTTP method) returns 405 Method Not Allowed")
+    void postToDataEndpoint_returns405() throws Exception {
+        mockMvc.perform(post("/api/data")
+                   .contentType(MediaType.APPLICATION_JSON)
+                   .content("{}"))
+               .andExpect(status().isMethodNotAllowed());
+    }
+
+    @Test
+    @DisplayName("GET /api/data returns 500 when service throws an unexpected exception")
+    void getData_serviceThrowsRuntimeException_returns500() throws Exception {
+        when(budgetService.loadData()).thenThrow(new RuntimeException("DB connection lost"));
+
+        mockMvc.perform(get("/api/data").accept(MediaType.APPLICATION_JSON))
+               .andExpect(status().isInternalServerError())
+               .andExpect(jsonPath("$.status").value(500))
+               .andExpect(jsonPath("$.message").value("An unexpected error occurred"));
+    }
+
+    @Test
+    @DisplayName("GET to a path not matched by any security rule returns 403")
+    void requestToUnknownPath_returns403() throws Exception {
+        mockMvc.perform(get("/some/path/not/in/security/rules"))
+               .andExpect(status().isForbidden());
+    }
 }
