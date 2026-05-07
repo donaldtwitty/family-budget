@@ -259,6 +259,17 @@ document.addEventListener('click', (event) => {
       resetPin();
       break;
 
+    // ── CSV Import ────────────────────────────────────────
+    case 'start-csv-import':
+      startCsvImport();
+      break;
+    case 'process-csv-import':
+      processCsvImport();
+      break;
+    case 'confirm-csv-import':
+      confirmCsvImport();
+      break;
+
     // ── Sync & Install ─────────────────────────────────────
     case 'show-sync':
       showSyncModal();

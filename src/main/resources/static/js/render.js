@@ -293,7 +293,13 @@ function renderSpend(spendFilter) {
       <p class="hero__amount">${fmt(entries.reduce((s, e) => s + e.amount, 0))}</p>
       <p class="hero__sub">${entries.length} transaction${entries.length !== 1 ? 's' : ''} logged</p>
     </div>
-    <button class="btn btn--primary btn--icon" data-action="add-expense">${ICON_PLUS} Log an Expense</button>
+    <div class="spend-actions">
+      <button class="btn btn--primary btn--icon spend-actions__primary" data-action="add-expense">${ICON_PLUS} Log an Expense</button>
+      <button class="btn btn--outline-green btn--icon desktop-only" data-action="start-csv-import">
+        <svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+        Import Bank CSV
+      </button>
+    </div>
     ${catBreakdown.length ? `<p class="section-heading mt-6">📊 This Month by Category</p><div class="card">${catBars}</div>` : ''}
     <div class="chips mt-6">${chips}</div>
     ${txRows}`;

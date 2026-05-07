@@ -680,6 +680,63 @@ button { font-family: var(--font-body); cursor: pointer; }
 .section-heading { font-size: 13px; font-weight: 700; color: var(--text-secondary); margin-bottom: 8px; }
 .empty-state     { text-align: center; color: var(--text-faint); font-size: 14px; padding: 20px; background: var(--white); border-radius: var(--radius-lg); box-shadow: var(--shadow-sm); }
 
+/* ── CSV Import ────────────────────────────────────────────── */
+
+/* Spend-tab action row */
+.spend-actions { display: flex; gap: 10px; flex-wrap: wrap; }
+.spend-actions__primary { flex: 1; }
+
+/* Desktop-only: hidden on mobile, shown on ≥768px */
+.desktop-only { display: none !important; }
+@media (min-width: 768px) { .desktop-only { display: flex !important; } }
+
+/* File-picker label */
+.import-file-label {
+  display: flex; align-items: center; gap: 10px;
+  padding: 14px 16px; border-radius: var(--radius-lg);
+  border: 2px dashed var(--green-border); background: var(--green-50);
+  color: var(--green-900); font-size: 14px; font-weight: 500;
+  cursor: pointer; transition: background .15s;
+}
+.import-file-label:hover { background: var(--green-100); }
+.import-file-icon { width: 20px; height: 20px; flex-shrink: 0; stroke: var(--green-900); }
+
+/* Review table */
+.import-scroll {
+  max-height: 42vh; overflow-y: auto;
+  border: 1px solid var(--border); border-radius: var(--radius-lg);
+}
+.import-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+.import-table thead { position: sticky; top: 0; background: var(--bg-muted); z-index: 1; }
+.import-table th,
+.import-table td { padding: 7px 9px; border-bottom: 1px solid var(--border); text-align: left; }
+.import-table th { font-weight: 600; color: var(--text-secondary); font-size: 11px; text-transform: uppercase; letter-spacing: .04em; }
+.import-th-cb  { width: 28px; }
+.import-th-amt { text-align: right; }
+.import-td-cb  { width: 28px; }
+.import-td-date { white-space: nowrap; color: var(--text-secondary); font-size: 12px; }
+.import-td-desc { min-width: 140px; }
+.import-td-cat  { min-width: 130px; }
+.import-td-amt  { text-align: right; white-space: nowrap; font-variant-numeric: tabular-nums; color: var(--red-600, #dc2626); font-weight: 500; }
+.import-td-amt--in { color: var(--green-900); }
+
+/* Inline edit fields inside the table */
+.import-desc,
+.import-cat {
+  width: 100%; padding: 4px 6px; font-size: 12px; font-family: var(--font-body);
+  border: 1px solid transparent; border-radius: 6px; background: transparent;
+  color: var(--text-primary);
+}
+.import-desc:focus,
+.import-cat:focus { border-color: var(--green-900); background: var(--white); outline: none; }
+
+/* Duplicate rows */
+.import-row--dup { background: var(--amber-100); opacity: .75; }
+.import-row--dup:hover { opacity: 1; }
+
+/* Duplicate badge in the info panel */
+.import-dup-badge { color: var(--amber-800); font-weight: 600; }
+
 /* ── Utility ───────────────────────────────────────────────── */
 .mt-4  { margin-top: 4px; }
 .mt-6  { margin-top: 6px; }
