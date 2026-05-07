@@ -35,9 +35,9 @@ function _showImportPicker() {
       </svg>
       <span id="import-file-name">Choose a CSV file…</span>
     </label>
-    <input id="f-csv-file" type="file" accept=".csv,text/csv" class="receipt-file-input" aria-hidden="true" />
+    <input id="f-csv-file" type="file" accept=".csv,.tsv,.txt,text/csv,text/plain,text/tab-separated-values" class="receipt-file-input" aria-hidden="true" />
     <button class="btn btn--primary" data-action="process-csv-import">📊 Parse &amp; Categorize</button>
-    <p class="sync-note">Works with Chase, Bank of America, Wells Fargo, and most banks · max 250 rows</p>
+    <p class="sync-note">Works with USAA, RBFCU, Chase, Bank of America, and most banks · max 250 rows</p>
   `);
 
   requestAnimationFrame(() => {
@@ -117,21 +117,37 @@ async function _parseWithClaude(csvText) {
   const billList    = AppData.bills.map((b) => b.name).join(', ');
   const incomeList  = AppData.income.map((i) => i.name).join(', ');
 
-  const prompt = `You are a bank statement parser. Parse the CSV bank statement below and return ONLY a JSON array — no explanation, no markdown fences.
+  const prompt = `You are a bank statement parser. Parse the bank export data below and return ONLY a valid JSON array — no explanation, no markdown, no code fences.
 
-Each element: { "date": "YYYY-MM-DD", "description": "Merchant name (max 40 chars)", "amount": 0.00, "type": "expense" or "income", "category": "...", "billName": null, "incomeSource": null }
+Each element must have exactly these fields:
+{ "date": "YYYY-MM-DD", "description": "Clean merchant name", "amount": 0.00, "type": "expense" or "income", "category": "...", "billName": null, "incomeSource": null }
 
-Rules:
-- date: convert any date format to YYYY-MM-DD
-- description: clean merchant name — remove check numbers, codes, and trailing spaces (e.g. "WALMART", "HEB GROCERY", "NETFLIX")
-- amount: always a positive number regardless of sign in the CSV
-- type: "income" for deposits / credits / payroll; "expense" for debits / purchases / payments / transfers out
-- category: the single best match from this list (use exact spelling): ${catNames}
-- billName: if this is a payment that matches one of these known bills (fuzzy match on name), return the EXACT bill name from this list — otherwise null. Bills: ${billList}
-- incomeSource: if this is income that matches one of these known sources (fuzzy match on name), return the EXACT source name from this list — otherwise null. Income sources: ${incomeList}
-- Skip header rows, beginning/ending balance rows, and rows without a dollar amount
+FORMAT DETECTION — the data may be tab-separated or comma-separated, detect automatically:
+- USAA format:  Date | Description | Original Description | Category | Amount | Status
+- RBFCU format: Post Date | Amount | Check Number | Payee
+- Other formats: detect columns by header row
 
-CSV data:
+FIELD RULES:
+- date: convert M/D/YYYY or MM/DD/YYYY or any format → YYYY-MM-DD
+- description: extract clean merchant name only — strip store numbers (#415), addresses, city/state codes, ZIP codes, confirmation codes, extra spaces, trailing digits. Examples:
+    "BURGER BOY 6 - PAT B 050626" → "Burger Boy"
+    "H-E-B #415 SCHERTZ TX" → "H-E-B"
+    "VACP TREAS 310 XXVA BENEF ***3600" → "VA Benefits"
+    "Accenture Federa 27722543C959 001 - PAYROLL" → "Accenture Payroll"
+    "SHELL OIL 12484 3835 E LOOP 1604 N CONVERSE TXUS" → "Shell Oil"
+    "CAPITAL ONE MOBILE PMT ***D30B" → "Capital One Payment"
+    "AT&T MOBILITY E 4331 COMMUNICATIONS DALLAS TXUS" → "AT&T"
+- amount: always a POSITIVE number. Use the sign in the original data to set type:
+    Negative amount in CSV → type: "expense"
+    Positive amount in CSV → type: "income"
+- type overrides: even if positive, "Transfer" category rows with no clear income source → "expense". Payroll/direct deposit/VA benefits/interest → "income".
+- category: pick the single best match from this exact list: ${catNames}. Use the bank's own Category column as a strong hint when available.
+- billName: if this is a payment that closely matches one of these bill names, return the EXACT name from this list (otherwise null): ${billList}
+- incomeSource: if this is income that closely matches one of these source names, return the EXACT name from this list (otherwise null): ${incomeList}
+
+SKIP: header rows, rows with $0.00 amount, balance summary rows, rows with Status = "Pending"
+
+Bank data:
 ${sample}`;
 
   const response = await fetch(ANTHROPIC_URL, {
