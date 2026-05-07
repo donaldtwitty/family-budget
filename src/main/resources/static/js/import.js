@@ -274,8 +274,10 @@ function confirmCsvImport() {
     const desc = document.querySelector(`.import-desc[data-idx="${i}"]`);
     const cat  = document.querySelector(`.import-cat[data-idx="${i}"]`);
 
-    const matchedBill   = t.billName     ? AppData.bills.find((b)  => b.name  === t.billName)     : null;
-    const matchedIncome = t.incomeSource ? AppData.income.find((i) => i.name  === t.incomeSource) : null;
+    const bKey          = (t.billName     || '').toLowerCase().trim();
+    const iKey          = (t.incomeSource || '').toLowerCase().trim();
+    const matchedBill   = bKey ? AppData.bills.find((b)  => b.name.toLowerCase().trim() === bKey)  : null;
+    const matchedIncome = iKey ? AppData.income.find((i) => i.name.toLowerCase().trim() === iKey) : null;
 
     logTransaction({
       type:       matchedBill ? 'bill' : t.type,

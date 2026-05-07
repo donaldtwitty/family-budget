@@ -281,6 +281,29 @@ function thisMonthIncome() {
 }
 
 /**
+ * Income ledger entries this month linked to a specific income source.
+ * @param {string} incomeId
+ * @returns {Array}
+ */
+function incomeReceivedThisMonth(incomeId) {
+  const mk = `${TODAY.getFullYear()}-${String(TODAY.getMonth() + 1).padStart(2, '0')}`;
+  return AppData.ledger.filter(
+    (e) => e.type === 'income' && e.incomeId === incomeId && e.date.startsWith(mk)
+  );
+}
+
+/**
+ * Income ledger entries this month NOT linked to any income source template.
+ * @returns {Array}
+ */
+function unlinkedIncomeThisMonth() {
+  const mk = `${TODAY.getFullYear()}-${String(TODAY.getMonth() + 1).padStart(2, '0')}`;
+  return AppData.ledger.filter(
+    (e) => e.type === 'income' && !e.incomeId && e.date.startsWith(mk)
+  ).sort((a, b) => b.date.localeCompare(a.date));
+}
+
+/**
  * Spending grouped by category for the current month.
  * @returns {Array<{ name: string, emoji: string, total: number }>}
  */

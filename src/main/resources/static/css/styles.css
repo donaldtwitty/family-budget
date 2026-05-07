@@ -500,11 +500,17 @@ button { font-family: var(--font-body); cursor: pointer; }
 .chip { padding: 5px 12px; border-radius: var(--radius-full); border: none; font-size: 12px; font-weight: 500; white-space: nowrap; box-shadow: var(--shadow-sm); flex-shrink: 0; background: var(--white); color: var(--text-secondary); }
 .chip.active { background: var(--green-900); color: var(--white); }
 
-.income-row { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
-.income-row__name   { font-size: 14px; font-weight: 600; }
+.income-row         { margin-bottom: 8px; }
+.income-row__main   { display: flex; justify-content: space-between; align-items: flex-start; }
+.income-row__name   { font-size: 14px; font-weight: 600; display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
 .income-row__day    { font-size: 12px; color: var(--text-faint); }
-.income-row__right  { display: flex; align-items: center; gap: 8px; }
+.income-row__entry  { font-size: 11px; color: var(--green-700); margin-top: 3px; }
+.income-row__right  { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
 .income-row__amount { font-size: 16px; font-weight: 700; color: var(--green-900); }
+
+.income-status               { font-size: 10px; font-weight: 700; padding: 2px 7px; border-radius: 10px; letter-spacing: .04em; }
+.income-status--received     { background: #d1fae5; color: #065f46; }
+.income-status--expected     { background: #fef3c7; color: #92400e; }
 
 /* ── Spend Tab ─────────────────────────────────────────────── */
 .spend-cat-row { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }

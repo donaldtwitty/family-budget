@@ -221,19 +221,36 @@ function renderBills(showIncome, activeFilter) {
   }).join('');
 
   const incomeRows = AppData.income.map((i) => {
-    const acc = AppData.accounts.find((a) => a.id === i.accountId);
+    const acc      = AppData.accounts.find((a) => a.id === i.accountId);
+    const received = incomeReceivedThisMonth(i.id);
+    const totalRec = received.reduce((s, e) => s + e.amount, 0);
+    const badge    = received.length
+      ? `<span class="income-status income-status--received">✓ RECEIVED</span>`
+      : `<span class="income-status income-status--expected">EXPECTED</span>`;
+    const receivedDetail = received.map((e) =>
+      `<p class="income-row__entry">↳ ${esc(e.date)} &nbsp;${fmt(e.amount)}${e.note ? ` · ${esc(e.note)}` : ''}</p>`
+    ).join('');
     return `<div class="card income-row">
-      <div>
-        <p class="income-row__name">${esc(i.name)}</p>
-        <p class="income-row__day">Expected ${ord(i.day)} · <span data-acc-id="${esc(i.accountId)}">${esc(acc ? acc.name : '')}</span></p>
-      </div>
-      <div class="income-row__right">
-        <p class="income-row__amount">${fmt(i.amount)}</p>
-        <button class="icon-btn icon-btn--edit" data-action="edit-income" data-id="${esc(i.id)}">${ICON_PENCIL}</button>
-        <button class="icon-btn icon-btn--del"  data-action="del-income"  data-id="${esc(i.id)}">${ICON_TRASH}</button>
+      <div class="income-row__main">
+        <div>
+          <p class="income-row__name">${esc(i.name)} ${badge}</p>
+          <p class="income-row__day">Expected ${ord(i.day)} · <span data-acc-id="${esc(i.accountId)}">${esc(acc ? acc.name : '')}</span></p>
+          ${receivedDetail}
+        </div>
+        <div class="income-row__right">
+          <p class="income-row__amount">${received.length ? fmt(totalRec) : fmt(i.amount)}</p>
+          <button class="icon-btn icon-btn--edit" data-action="edit-income" data-id="${esc(i.id)}">${ICON_PENCIL}</button>
+          <button class="icon-btn icon-btn--del"  data-action="del-income"  data-id="${esc(i.id)}">${ICON_TRASH}</button>
+        </div>
       </div>
     </div>`;
   }).join('');
+
+  const unlinked = unlinkedIncomeThisMonth();
+  const unlinkedRows = unlinked.length ? `
+    <p class="section-heading mt-2 mb-4">Other Income This Month</p>
+    ${unlinked.map((e) => renderLedgerRow(e, false)).join('')}
+  ` : '';
 
   const sorted   = [...AppData.bills].sort((a, b) => a.day - b.day);
   const filtered = activeFilter === 'All' ? sorted : sorted.filter((b) => b.cat === activeFilter);
@@ -247,7 +264,7 @@ function renderBills(showIncome, activeFilter) {
       <span class="section-toggle__label">${ICON_DOLLAR} Income Sources</span>
       <span class="section-toggle__icon">${showIncome ? ICON_CHEVRON_UP : ICON_CHEVRON_DOWN}</span>
     </button>
-    ${showIncome ? incomeRows + `<button class="btn btn--outline-green btn--icon mb-14" data-action="add-income">${ICON_PLUS} Add Income Source</button>` : ''}
+    ${showIncome ? incomeRows + unlinkedRows + `<button class="btn btn--outline-green btn--icon mb-14" data-action="add-income">${ICON_PLUS} Add Income Source</button>` : ''}
     <div class="chips">${chips}</div>
     ${filtered.map((b) => renderBillRow(b, getBillStatus(b), true)).join('')}
     <button class="btn btn--outline-green btn--icon mt-4" data-action="add-bill">${ICON_PLUS} Add Bill</button>`;
