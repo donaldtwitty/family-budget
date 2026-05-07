@@ -3,7 +3,7 @@
  * Caches all app shell files on install; serves from cache first.
  */
 
-const CACHE_NAME = 'family-budget-v7';
+const CACHE_NAME = 'family-budget-v8';
 
 const ASSETS = [
   './',
@@ -18,6 +18,7 @@ const ASSETS = [
   './js/modals.js',
   './js/receipt.js',
   './js/import.js',
+  './js/chat.js',
   './js/pin.js',
   './js/app.js',
   'https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,600;9..40,700&display=swap',
