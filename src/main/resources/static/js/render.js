@@ -345,11 +345,13 @@ function renderSpend(spendFilter, viewKey, search) {
       <span class="month-nav__label">${esc(monthLabel)}</span>
       <button class="month-nav__btn" data-action="next-month"${isCurrentMonth ? ' disabled' : ''}>›</button>
     </div>
-    <button class="btn btn--primary btn--icon" data-action="add-expense">${ICON_PLUS} Log an Expense</button>
-    <button class="btn btn--outline-green btn--icon" data-action="start-csv-import">
-      <svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
-      Import Bank CSV
-    </button>
+    <div class="spend-btn-stack">
+      <button class="btn btn--primary btn--icon" data-action="add-expense">${ICON_PLUS} Log an Expense</button>
+      <button class="btn btn--outline-green btn--icon" data-action="start-csv-import">
+        <svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+        Import Bank CSV
+      </button>
+    </div>
     <div class="spend-tools">
       <button class="btn btn--subtle" data-action="show-budget-settings">💰 Budgets</button>
       <button class="btn btn--subtle" data-action="show-ytd-summary">📅 YTD</button>

@@ -897,6 +897,7 @@ button { font-family: var(--font-body); cursor: pointer; }
 .month-nav__label { font-size: 13px; font-weight: 600; color: var(--text-secondary); min-width: 120px; text-align: center; }
 
 /* ── Spend Tools ───────────────────────────────────────────── */
+.spend-btn-stack { display: flex; flex-direction: column; gap: 10px; margin-bottom: 12px; }
 .spend-tools {
   display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; margin-bottom: 12px;
 }
