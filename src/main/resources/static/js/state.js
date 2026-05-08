@@ -253,17 +253,45 @@ function realBalance(accountId) {
 }
 
 /**
- * Safe to Spend = realBalance minus total of all unpaid pending/overdue bills.
+ * Safe to Spend = realBalance minus bills that are due AND whose covering
+ * paycheck has already been received.
+ *
+ * For accounts with multiple income sources (e.g. RBFCU paid on the 6th and
+ * 21st), a PENDING bill is only deducted once the income source that covers it
+ * has been logged this month.  Covering income = the income source whose
+ * expected day is the largest day ≤ the bill's due day.
+ * OVERDUE bills are always deducted regardless (they're already past due).
+ *
  * @param {string} accountId
  * @returns {number}
  */
 function safeToSpend(accountId) {
-  const balance  = realBalance(accountId);
-  const pending  = AppData.bills
+  const balance = realBalance(accountId);
+
+  // Income sources for this account sorted by expected day ascending
+  const accIncome = AppData.income
+    .filter((i) => i.accountId === accountId)
+    .sort((a, b) => (a.day || 0) - (b.day || 0));
+
+  const deductions = AppData.bills
     .filter((b) => b.accountId === accountId)
-    .filter((b) => getBillStatus(b) !== 'paid')
+    .filter((b) => {
+      const status = getBillStatus(b);
+      if (status === 'paid')    return false; // already paid — don't deduct
+      if (status === 'overdue') return true;  // past due — always deduct
+
+      // PENDING bill: only deduct if the paycheck that covers it has arrived
+      if (!accIncome.length) return true; // no income configured → original behaviour
+
+      // Covering income = income source with the largest expected day ≤ bill's day
+      const covering = [...accIncome].reverse().find((i) => (i.day || 0) <= b.day);
+      if (!covering) return true; // bill is before any pay day (prior-period bill) → deduct
+
+      return incomeReceivedThisMonth(covering.id).length > 0;
+    })
     .reduce((sum, b) => sum + b.amount, 0);
-  return balance - pending;
+
+  return balance - deductions;
 }
 
 /* ── Ledger Queries ──────────────────────────────────────── */
