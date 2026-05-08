@@ -177,16 +177,21 @@ function _flashSave(type) {
  *           category: string, accountId: string, billId?: string,
  *           incomeId?: string, note?: string }} entry
  */
+/**
+ * Adds a transaction and returns the new entry's id.
+ */
 function logTransaction(entry) {
+  const id = uid();
   AppData.ledger.push({
-    id:        uid(),
-    billId:    null,
-    incomeId:  null,
-    note:      '',
-    category:  '',
+    id,
+    billId:   null,
+    incomeId: null,
+    note:     '',
+    category: '',
     ...entry,
   });
   saveAppData();
+  return id;
 }
 
 /**

@@ -5,9 +5,10 @@
 
 /* eslint-disable no-unused-vars */
 
-const PIN_HASH_KEY   = 'family-budget-pin-hash';
-const PIN_MAX_DIGITS = 6;
-const PIN_MIN_DIGITS = 4;
+const PIN_HASH_KEY    = 'family-budget-pin-hash';
+const PIN_SESSION_KEY = 'family-budget-pin-session'; // survives refresh, cleared on tab close
+const PIN_MAX_DIGITS  = 6;
+const PIN_MIN_DIGITS  = 4;
 
 /** @returns {string|null} */
 function getStoredPinHash() { try { return localStorage.getItem(PIN_HASH_KEY); } catch { return null; } }
@@ -16,6 +17,10 @@ function _storePinHash(hash) { localStorage.setItem(PIN_HASH_KEY, hash); }
 function _clearPin() { localStorage.removeItem(PIN_HASH_KEY); }
 /** @returns {boolean} */
 function hasPinConfigured() { return !!getStoredPinHash(); }
+
+function _markUnlocked() { try { sessionStorage.setItem(PIN_SESSION_KEY, '1'); } catch {} }
+function _markLocked()   { try { sessionStorage.removeItem(PIN_SESSION_KEY); } catch {} }
+function _isUnlocked()   { try { return sessionStorage.getItem(PIN_SESSION_KEY) === '1'; } catch { return false; } }
 
 /** @param {string} str @returns {Promise<string>} */
 async function _sha256(str) {
@@ -124,6 +129,7 @@ function _dismissPin() {
   const screen = document.getElementById('pin-screen');
   if (screen) { screen.classList.add('pin-screen--exit'); setTimeout(() => screen.remove(), 300); }
   document.body.style.overflow = '';
+  _markUnlocked();
 }
 
 function _pinToast(msg) {
@@ -159,8 +165,37 @@ function showPinSettings() {
   `);
 }
 
-/** Called from app.js init — shows PIN screen on every launch */
+/**
+ * Sets up a listener that locks the app whenever the screen sleeps or the
+ * user switches away from the app, but NOT on a plain page refresh.
+ * pagehide fires before visibilitychange on refresh/navigation, so we use
+ * it as a signal to skip the lock for that cycle.
+ */
+let _lockListenerReady = false;
+function _setupSleepLock() {
+  if (_lockListenerReady) return;
+  _lockListenerReady = true;
+
+  let _refreshing = false;
+  window.addEventListener('pagehide', () => { _refreshing = true; });
+
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'hidden') {
+      if (_refreshing) { _refreshing = false; return; } // page refresh — don't lock
+      _markLocked(); // screen sleep or app switch — lock on return
+    } else if (document.visibilityState === 'visible') {
+      _refreshing = false;
+      if (hasPinConfigured() && !_isUnlocked()) showPinScreen('unlock');
+    }
+  });
+}
+
+/** Called from app.js init */
 function initPinLock() {
+  _setupSleepLock();
+
+  if (_isUnlocked()) return; // already authenticated this session (e.g. page refresh)
+
   if (hasPinConfigured()) {
     showPinScreen('unlock');
   } else {

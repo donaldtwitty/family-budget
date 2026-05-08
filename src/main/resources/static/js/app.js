@@ -137,6 +137,10 @@ document.addEventListener('click', (event) => {
       saveBillPayment(target.dataset.billId);
       render();
       break;
+    case 'undo-bill-payment':
+      undoBillPayment();
+      render();
+      break;
     case 'add-bill':
       showBillForm(null);
       break;

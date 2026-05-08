@@ -187,6 +187,8 @@ function showPayBillModal(billId) {
   `);
 }
 
+let _lastPaymentUndo = null; // { txId, debtId, debtDelta }
+
 function saveBillPayment(billId) {
   const bill  = AppData.bills.find((b) => b.id === billId);
   if (!bill) return;
@@ -195,21 +197,46 @@ function saveBillPayment(billId) {
   const note   = val('f-note');
   if (amount <= 0) { alert('Please enter a valid amount.'); return; }
 
-  // Log the ledger transaction (deducts from account balance)
-  logTransaction({ type: 'bill', name: bill.name, amount, date, category: bill.cat, accountId: bill.accountId, billId, note });
+  const txId = logTransaction({ type: 'bill', name: bill.name, amount, date, category: bill.cat, accountId: bill.accountId, billId, note });
 
-  // If linked to a debt, reduce its balance by the principal portion paid
+  let debtDelta = 0;
   if (bill.debtId) {
     AppData.debts = AppData.debts.map((d) => {
       if (d.id !== bill.debtId) return d;
-      // Subtract interest for this month to get principal portion
       const monthlyInterest = d.rate > 0 ? d.balance * (d.rate / 100) / 12 : 0;
       const principal       = Math.max(0, amount - monthlyInterest);
+      debtDelta = principal;
       return { ...d, balance: Math.max(0, d.balance - principal) };
     });
     saveAppData();
   }
 
+  _lastPaymentUndo = { txId, debtId: bill.debtId || null, debtDelta };
+
+  showModal('Payment Logged', `
+    <div class="info-panel info-panel--green">
+      ✅ <strong>${esc(bill.name)}</strong> marked as paid · ${fmt(amount)}
+    </div>
+    <button class="btn btn--subtle" data-action="undo-bill-payment">↩ Undo this payment</button>
+    <button class="btn btn--primary" data-action="hide-modal">Done</button>
+  `);
+  render();
+}
+
+function undoBillPayment() {
+  if (!_lastPaymentUndo) return;
+  const { txId, debtId, debtDelta } = _lastPaymentUndo;
+  _lastPaymentUndo = null;
+
+  AppData.ledger = AppData.ledger.filter((e) => e.id !== txId);
+
+  if (debtId && debtDelta > 0) {
+    AppData.debts = AppData.debts.map((d) =>
+      d.id === debtId ? { ...d, balance: d.balance + debtDelta } : d
+    );
+  }
+
+  saveAppData();
   hideModal();
 }
 
@@ -497,8 +524,8 @@ function showIncomeForm(id) {
   showModal(inc ? 'Edit Income Source' : 'Add Income Source', `
     <div><label class="form-label" for="f-name">Source Name</label><input id="f-name" class="form-input" type="text" placeholder="e.g. VA Benefits" value="${esc(inc?.name || '')}" autocomplete="off" /></div>
     <div class="form-grid-2">
-      <div><label class="form-label" for="f-amount">Expected Amount ($)</label><input id="f-amount" class="form-input" type="number" placeholder="0.00" value="${inc?.amount || ''}" min="0" step="0.01" /></div>
-      <div><label class="form-label" for="f-day">Expected Day (1–31)</label><input id="f-day" class="form-input" type="number" placeholder="1" value="${inc?.day || ''}" min="1" max="31" /></div>
+      <div><label class="form-label" for="f-amount">Expected Amount ($)</label><input id="f-amount" class="form-input" type="number" placeholder="0.00" value="${inc?.amount ?? ''}" min="0" step="0.01" /></div>
+      <div><label class="form-label" for="f-day">Expected Day (1–31)</label><input id="f-day" class="form-input" type="number" placeholder="1" value="${inc?.day ?? ''}" min="1" max="31" /></div>
     </div>
     <div><label class="form-label" for="f-account">Account</label><select id="f-account" class="form-input">${accountOptions(inc?.accountId || AppData.accounts[0].id)}</select></div>
     <button class="btn btn--primary" data-action="save-income-template" data-edit-id="${editId}">💾 ${inc ? 'Update' : 'Add'} Income Source</button>
