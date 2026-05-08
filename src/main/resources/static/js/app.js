@@ -6,7 +6,9 @@
 /* eslint-disable no-unused-vars */
 
 /* ── UI State ─────────────────────────────────────────────── */
-let currentTab   = 'home';
+const VALID_TABS = ['home', 'bills', 'spend', 'goals', 'debts'];
+let currentTab   = VALID_TABS.includes(sessionStorage.getItem('active-tab'))
+                     ? sessionStorage.getItem('active-tab') : 'home';
 let showIncome   = false;
 let activeFilter = 'All';
 let spendFilter  = 'All';
@@ -71,6 +73,7 @@ function _applyAccountColors() {
  */
 function setTab(tab) {
   currentTab   = tab;
+  sessionStorage.setItem('active-tab', tab);
   showIncome   = false;
   activeFilter = 'All';
   spendFilter  = 'All';
@@ -404,6 +407,12 @@ function registerServiceWorker() {
 /* ── Boot ────────────────────────────────────────────────── */
 (async function init() {
   await loadAppData();
+  // Sync nav highlight with the restored tab before first render
+  document.querySelectorAll('.nav-tab').forEach((btn) => {
+    const active = btn.dataset.tab === currentTab;
+    btn.classList.toggle('active', active);
+    btn.setAttribute('aria-current', active ? 'page' : 'false');
+  });
   render();
   registerServiceWorker();
   initPinLock();
