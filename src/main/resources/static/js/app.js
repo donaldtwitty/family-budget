@@ -10,6 +10,23 @@ let currentTab   = 'home';
 let showIncome   = false;
 let activeFilter = 'All';
 let spendFilter  = 'All';
+let viewMonth    = null;  // null = current month; "YYYY-MM" for historical
+let ledgerSearch = '';
+let _searchTimer = null;
+
+/** Returns the month key to use for Spend tab queries. */
+function _viewKey() { return viewMonth || _monthKey(); }
+
+/** Shifts viewMonth by delta months; clamps at current month. */
+function _shiftMonth(delta) {
+  const cur    = _viewKey();
+  const [y, m] = cur.split('-').map(Number);
+  const d      = new Date(y, m - 1 + delta, 1);
+  const shifted = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+  viewMonth    = shifted >= _monthKey() ? null : shifted;
+  ledgerSearch = '';
+  render();
+}
 
 /* ── Render ──────────────────────────────────────────────── */
 
@@ -17,18 +34,23 @@ let spendFilter  = 'All';
  * Re-renders the active tab content and refreshes the header.
  */
 function render() {
+  const searchFocused = document.activeElement?.id === 'spend-search';
   updateHeader();
   const content = document.getElementById('content');
   switch (currentTab) {
-    case 'home':   content.innerHTML = renderHome(showIncome);           break;
-    case 'bills':  content.innerHTML = renderBills(showIncome, activeFilter); break;
-    case 'spend':  content.innerHTML = renderSpend(spendFilter);         break;
-    case 'goals':  content.innerHTML = renderGoals();                    break;
-    case 'debts':  content.innerHTML = renderDebts();                    break;
+    case 'home':   content.innerHTML = renderHome(showIncome);                           break;
+    case 'bills':  content.innerHTML = renderBills(showIncome, activeFilter);            break;
+    case 'spend':  content.innerHTML = renderSpend(spendFilter, _viewKey(), ledgerSearch); break;
+    case 'goals':  content.innerHTML = renderGoals();                                    break;
+    case 'debts':  content.innerHTML = renderDebts();                                    break;
     default:       content.innerHTML = '';
   }
   applyDynamicStyles();
   _applyAccountColors();
+  if (searchFocused) {
+    const inp = document.getElementById('spend-search');
+    if (inp) { inp.focus(); inp.setSelectionRange(inp.value.length, inp.value.length); }
+  }
 }
 
 /**
@@ -52,6 +74,7 @@ function setTab(tab) {
   showIncome   = false;
   activeFilter = 'All';
   spendFilter  = 'All';
+  ledgerSearch = '';
 
   document.querySelectorAll('.nav-tab').forEach((btn) => {
     const active = btn.dataset.tab === tab;
@@ -270,6 +293,50 @@ document.addEventListener('click', (event) => {
       confirmCsvImport();
       break;
 
+    // ── Month Navigation ──────────────────────────────────
+    case 'prev-month': _shiftMonth(-1); break;
+    case 'next-month': _shiftMonth(1);  break;
+
+    // ── Spend Tab Tools ───────────────────────────────────
+    case 'show-bill-history':
+      showBillHistoryModal(id);
+      break;
+    case 'show-ytd-summary':
+      showYtdSummaryModal();
+      break;
+    case 'export-csv':
+      exportLedgerCsv();
+      break;
+    case 'show-budget-settings':
+      showBudgetSettingsModal();
+      break;
+    case 'save-budget':
+      saveBudget();
+      render();
+      break;
+
+    // ── Reconciliation ────────────────────────────────────
+    case 'show-reconcile':
+      showReconcileModal(id);
+      break;
+    case 'save-reconcile':
+      saveReconcile(id);
+      break;
+
+    // ── Notifications ─────────────────────────────────────
+    case 'enable-notifications':
+      _requestNotifications();
+      break;
+
+    // ── Account Management ─────────────────────────────────
+    case 'edit-account':
+      showAccountForm(id);
+      break;
+    case 'save-account':
+      saveAccount(editId);
+      render();
+      break;
+
     // ── Sync & Install ─────────────────────────────────────
     case 'show-sync':
       showSyncModal();
@@ -282,6 +349,15 @@ document.addEventListener('click', (event) => {
       break;
     case 'show-install':
       showInstallModal();
+      break;
+    case 'show-api-token':
+      showApiTokenModal();
+      break;
+    case 'save-api-token':
+      saveApiToken();
+      break;
+    case 'clear-api-token':
+      clearApiToken();
       break;
     case 'copy-code':
       copyExportCode();
@@ -304,6 +380,14 @@ document.addEventListener('keydown', (e) => {
   if (e.key === 'Escape') hideModal();
 });
 
+/* ── Search input ────────────────────────────────────────── */
+document.addEventListener('input', (e) => {
+  if (e.target.id !== 'spend-search') return;
+  ledgerSearch = e.target.value;
+  clearTimeout(_searchTimer);
+  _searchTimer = setTimeout(() => render(), 200);
+});
+
 /* ── Service Worker ──────────────────────────────────────── */
 function registerServiceWorker() {
   if ('serviceWorker' in navigator) {
@@ -319,4 +403,5 @@ function registerServiceWorker() {
   render();
   registerServiceWorker();
   initPinLock();
+  checkBillNotifications();
 }());

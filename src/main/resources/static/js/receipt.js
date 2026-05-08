@@ -6,7 +6,7 @@
 /* eslint-disable no-unused-vars */
 
 const API_KEY_STORAGE = 'family-budget-anthropic-key';
-const ANTHROPIC_MODEL = 'claude-opus-4-5';
+const ANTHROPIC_MODEL = 'claude-haiku-4-5-20251001'; // fast + cheap for vision tasks
 const ANTHROPIC_URL   = 'https://api.anthropic.com/v1/messages';
 
 /* ── API Key ─────────────────────────────────────────────── */

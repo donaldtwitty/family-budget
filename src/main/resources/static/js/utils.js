@@ -23,15 +23,18 @@ function fmt(n) {
 }
 
 /**
- * Returns ordinal string for a number. e.g. 1 → "1st"
+ * Returns ordinal string for a number. e.g. 1 → "1st", 21 → "21st"
  * @param {number} n
  * @returns {string}
  */
 function ord(n) {
-  if (n === 1) return '1st';
-  if (n === 2) return '2nd';
-  if (n === 3) return '3rd';
-  return `${n}th`;
+  if (n % 100 >= 11 && n % 100 <= 13) return `${n}th`;
+  switch (n % 10) {
+    case 1: return `${n}st`;
+    case 2: return `${n}nd`;
+    case 3: return `${n}rd`;
+    default: return `${n}th`;
+  }
 }
 
 /**

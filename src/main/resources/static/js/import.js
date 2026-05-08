@@ -5,6 +5,8 @@
 
 /* eslint-disable no-unused-vars */
 
+const IMPORT_MODEL = 'claude-sonnet-4-6'; // better reasoning for CSV categorization
+
 /** Module-level state shared between the picker, preview, and confirm steps. */
 let _importState = null; // { transactions: Array, accountId: string }
 
@@ -122,30 +124,38 @@ async function _parseWithClaude(csvText) {
 Each element must have exactly these fields:
 { "date": "YYYY-MM-DD", "description": "Clean merchant name", "amount": 0.00, "type": "expense" or "income", "category": "...", "billName": null, "incomeSource": null }
 
-FORMAT DETECTION — the data may be tab-separated or comma-separated, detect automatically:
-- USAA format:  Date | Description | Original Description | Category | Amount | Status
-- RBFCU format: Post Date | Amount | Check Number | Payee
-- Other formats: detect columns by header row
+FORMAT DETECTION — detect automatically from the header row (may be comma or tab separated):
+- USAA format:  Date, Description, Original Description, Category, Amount, Status
+- RBFCU format: Post Date, Amount, Check Number, Payee
+- Other formats: detect columns from the header row
 
 FIELD RULES:
-- date: convert M/D/YYYY or MM/DD/YYYY or any format → YYYY-MM-DD
-- description: extract clean merchant name only — strip store numbers (#415), addresses, city/state codes, ZIP codes, confirmation codes, extra spaces, trailing digits. Examples:
+- date: convert any date format → YYYY-MM-DD
+- description: extract a clean, short merchant name. Strip store numbers, addresses, city/state codes, ZIP codes, confirmation codes, trailing digits, and junk. Examples:
     "BURGER BOY 6 - PAT B 050626" → "Burger Boy"
     "H-E-B #415 SCHERTZ TX" → "H-E-B"
     "VACP TREAS 310 XXVA BENEF ***3600" → "VA Benefits"
+    "VAED TREAS 310 XXVA EDUC ***3600" → "VA Education Benefits"
     "Accenture Federa 27722543C959 001 - PAYROLL" → "Accenture Payroll"
     "SHELL OIL 12484 3835 E LOOP 1604 N CONVERSE TXUS" → "Shell Oil"
     "CAPITAL ONE MOBILE PMT ***D30B" → "Capital One Payment"
-    "AT&T MOBILITY E 4331 COMMUNICATIONS DALLAS TXUS" → "AT&T"
-- amount: always a POSITIVE number. Use the sign in the original data to set type:
-    Negative amount in CSV → type: "expense"
-    Positive amount in CSV → type: "income"
-- type overrides: even if positive, "Transfer" category rows with no clear income source → "expense". Payroll/direct deposit/VA benefits/interest → "income".
-- category: pick the single best match from this exact list: ${catNames}. Use the bank's own Category column as a strong hint when available.
-- billName: if this is a payment that closely matches one of these bill names, return the EXACT name from this list (otherwise null): ${billList}
-- incomeSource: if this is income that closely matches one of these source names, return the EXACT name from this list (otherwise null): ${incomeList}
+    "USAA FUNDS TRANSFER CR" → "USAA Transfer In"
+    "USAA FUNDS TRANSFER DB" → "USAA Transfer Out"
+    "ATM REBATE" → "ATM Fee Rebate"
+- amount: always output as a POSITIVE number. Use the original sign to set type:
+    Negative original amount → type: "expense"
+    Positive original amount → type: "income"
+- type overrides (apply these after the sign rule):
+    VA benefits, education benefits, payroll, direct deposit, interest, ATM rebates → always "income"
+    Credit card payments, loan payments → "expense"
+    Internal bank transfers OUT (negative, description contains "TRANSFER DB" or "FUNDS TRANSFER") → "expense"
+    Internal bank transfers IN (positive, description contains "TRANSFER CR" or "FUNDS TRANSFER CR") → "income"
+    If still uncertain whether a positive-amount row is income or expense, default to "income"
+- category: pick the single best match from this exact list: ${catNames}. Use the bank's Category column as a strong hint when available.
+- billName: if this looks like a payment matching one of these bill names, return the EXACT name from this list (otherwise null): ${billList}
+- incomeSource: if this is income matching one of these source names, return the EXACT name from this list (otherwise null): ${incomeList}
 
-SKIP: header rows, rows with $0.00 amount, balance summary rows, rows with Status = "Pending"
+SKIP: header rows, rows where amount is exactly 0.00, balance/summary rows, and any row where the Status column value is "Pending"
 
 Bank data:
 ${sample}`;
@@ -159,7 +169,7 @@ ${sample}`;
       'anthropic-dangerous-direct-browser-access': 'true',
     },
     body: JSON.stringify({
-      model: ANTHROPIC_MODEL,
+      model: IMPORT_MODEL,
       max_tokens: 4096,
       messages: [{ role: 'user', content: prompt }],
     }),
@@ -190,9 +200,14 @@ ${sample}`;
 
 /* ── Step 3 — Preview + confirm ─────────────────────────── */
 
-/** @param {{ date:string, amount:number }} t */
+/** @param {{ date:string, amount:number, description:string }} t */
 function _isDuplicate(t) {
-  return AppData.ledger.some((e) => e.date === t.date && Math.abs(e.amount - t.amount) < 0.01);
+  const desc = (t.description || '').toLowerCase().trim();
+  return AppData.ledger.some((e) =>
+    e.date === t.date &&
+    Math.abs(e.amount - t.amount) < 0.01 &&
+    (e.name || '').toLowerCase().trim() === desc
+  );
 }
 
 function _showImportPreview(transactions, accountId) {

@@ -880,6 +880,70 @@ button { font-family: var(--font-body); cursor: pointer; }
 .import-match-badge--bill   { background: #d1fae5; color: #065f46; }
 .import-match-badge--income { background: #dbeafe; color: #1e40af; }
 
+/* ── Month Navigation ──────────────────────────────────────── */
+.month-nav {
+  display: flex; align-items: center; justify-content: center; gap: 14px;
+  margin-top: 10px;
+}
+.month-nav__btn {
+  background: rgba(255,255,255,.2); border: none; border-radius: 50%;
+  width: 30px; height: 30px; color: var(--white);
+  font-size: 18px; line-height: 1; cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+  transition: background var(--transition);
+}
+.month-nav__btn:hover:not(:disabled)  { background: rgba(255,255,255,.3); }
+.month-nav__btn:disabled { opacity: .35; cursor: default; }
+.month-nav__label { font-size: 14px; font-weight: 600; color: rgba(255,255,255,.9); min-width: 120px; text-align: center; }
+
+/* ── Spend Tools ───────────────────────────────────────────── */
+.spend-tools {
+  display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 12px;
+}
+
+/* ── Spend Search ──────────────────────────────────────────── */
+.spend-search {
+  width: 100%; padding: 10px 12px;
+  border: 1.5px solid var(--border); border-radius: 10px;
+  font-size: 14px; font-family: var(--font-body);
+  background: var(--white); color: var(--text-primary); outline: none;
+  margin-bottom: 4px;
+}
+.spend-search:focus { border-color: var(--green-900); box-shadow: 0 0 0 3px rgba(27,67,50,.1); }
+
+/* ── Budget bars ───────────────────────────────────────────── */
+.progress-fill--red { background: linear-gradient(90deg, var(--red-700), var(--red-600)); }
+.spend-cat-row__total--over { color: var(--red-600); font-weight: 700; }
+
+/* ── Budget Settings ───────────────────────────────────────── */
+.budget-cat-row { display: flex; align-items: center; gap: 10px; }
+.budget-cat-label { display: flex; align-items: center; gap: 6px; flex: 1; font-size: 14px; font-weight: 600; cursor: default; }
+.budget-cat-input { width: 110px; padding: 8px 10px; }
+
+/* ── Bill History ──────────────────────────────────────────── */
+.hist-entry {
+  display: flex; align-items: center; gap: 10px;
+  padding: 8px 12px; background: var(--bg-muted);
+  border-radius: var(--radius-sm); margin-bottom: 4px;
+}
+.hist-entry__date   { font-size: 12px; color: var(--text-muted); min-width: 90px; }
+.hist-entry__amount { font-size: 14px; font-weight: 700; color: var(--green-900); flex: 1; }
+.hist-entry__note   { font-size: 12px; color: var(--text-faint); font-style: italic; }
+
+/* ── YTD Summary ───────────────────────────────────────────── */
+.ytd-row td { padding: 7px 10px; }
+.ytd-month  { font-weight: 600; font-size: 13px; }
+.ytd-in     { text-align: right; color: var(--green-900); font-size: 12px; }
+.ytd-out    { text-align: right; color: var(--red-600); font-size: 12px; }
+.ytd-net    { text-align: right; font-weight: 700; font-size: 12px; }
+.ytd-net--pos { color: var(--green-700); }
+.ytd-net--neg { color: var(--red-600); }
+.ytd-cat-row {
+  display: flex; justify-content: space-between; align-items: center;
+  padding: 6px 0; font-size: 13px; border-bottom: 1px solid var(--bg-subtle);
+}
+.ytd-cat-row:last-child { border-bottom: none; }
+
 /* ── Utility ───────────────────────────────────────────────── */
 .mt-4  { margin-top: 4px; }
 .mt-6  { margin-top: 6px; }

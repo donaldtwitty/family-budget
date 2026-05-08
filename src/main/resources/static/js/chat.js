@@ -10,6 +10,8 @@
 let _chatHistory = [];
 let _chatOpen    = false;
 let _chatReady   = false; // true after first open (welcome shown)
+const CHAT_MAX_HISTORY = 20; // max messages kept (10 exchanges)
+const CHAT_MODEL       = 'claude-sonnet-4-6';
 
 /* ── Bootstrap ───────────────────────────────────────────── */
 
@@ -113,6 +115,7 @@ async function _submitMessage() {
   input.style.height = 'auto';
 
   _chatHistory.push({ role: 'user', content: text });
+  if (_chatHistory.length > CHAT_MAX_HISTORY) _chatHistory = _chatHistory.slice(-CHAT_MAX_HISTORY);
   _appendBubble('user', text);
 
   const send = document.getElementById('chat-send');
@@ -123,6 +126,7 @@ async function _submitMessage() {
     const reply = await _callClaude();
     _hideTyping();
     _chatHistory.push({ role: 'assistant', content: reply });
+    if (_chatHistory.length > CHAT_MAX_HISTORY) _chatHistory = _chatHistory.slice(-CHAT_MAX_HISTORY);
     _appendBubble('assistant', reply);
   } catch (err) {
     _hideTyping();
@@ -146,7 +150,7 @@ async function _callClaude() {
       'anthropic-dangerous-direct-browser-access': 'true',
     },
     body: JSON.stringify({
-      model:      ANTHROPIC_MODEL,
+      model:      CHAT_MODEL,
       max_tokens: 1024,
       system:     _buildContext(),
       messages:   _chatHistory,

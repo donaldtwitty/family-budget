@@ -437,7 +437,15 @@ function showContributeForm(id) {
 function addFunds(id) {
   const amount = numVal('f-amount');
   if (!amount || amount <= 0) { alert('Enter a valid amount.'); return; }
-  AppData.goals = AppData.goals.map((g) => g.id === id ? { ...g, saved: Math.min(g.target, g.saved + amount) } : g);
+  AppData.goals = AppData.goals.map((g) => {
+    if (g.id !== id) return g;
+    const remaining = Math.max(0, g.target - g.saved);
+    if (remaining > 0 && amount > remaining) {
+      alert(`Only ${fmt(remaining)} left to reach the goal — adding that amount instead of ${fmt(amount)}.`);
+      return { ...g, saved: g.target };
+    }
+    return { ...g, saved: Math.min(g.target, g.saved + amount) };
+  });
   saveAppData(); hideModal();
 }
 
@@ -524,17 +532,24 @@ function showAccountForm(id) {
   const editId = acc ? esc(acc.id) : '';
   showModal(acc ? 'Edit Account' : 'Add Account', `
     <div><label class="form-label" for="f-name">Account Name</label><input id="f-name" class="form-input" type="text" placeholder="e.g. Checking" value="${esc(acc?.name || '')}" autocomplete="off" /></div>
+    <div>
+      <label class="form-label" for="f-opening">Current Balance ($)</label>
+      <input id="f-opening" class="form-input" type="number" placeholder="0.00" value="${acc?.openingBalance ?? 0}" min="0" step="0.01" />
+      <p class="form-hint">Set this to your actual bank balance so Safe to Spend is accurate.</p>
+    </div>
     <button class="btn btn--primary" data-action="save-account" data-edit-id="${editId}">💾 ${acc ? 'Update' : 'Add'} Account</button>
+    ${acc ? `<button class="btn btn--subtle" data-action="show-reconcile" data-id="${esc(acc.id)}">⚖️ Reconcile Balance</button>` : ''}
   `);
 }
 
 function saveAccount(editId) {
-  const name = val('f-name');
+  const name           = val('f-name');
+  const openingBalance = numVal('f-opening');
   if (!name) { alert('Please enter an account name.'); return; }
   if (editId) {
-    AppData.accounts = AppData.accounts.map((a) => a.id === editId ? { ...a, name } : a);
+    AppData.accounts = AppData.accounts.map((a) => a.id === editId ? { ...a, name, openingBalance } : a);
   } else {
-    AppData.accounts.push({ id: uid(), name, color: '#1b4332' });
+    AppData.accounts.push({ id: uid(), name, color: '#1b4332', openingBalance });
   }
   saveAppData(); hideModal();
 }
@@ -545,10 +560,10 @@ function showSyncModal() {
   const code = btoa(unescape(encodeURIComponent(JSON.stringify(AppData))));
   showModal('Sync Between Phones', `
     <div class="info-panel info-panel--green">
-      <strong>To sync with your wife's phone:</strong><br>
+      <strong>To sync with another phone:</strong><br>
       1. Tap <strong>Copy Code</strong> and send via iMessage<br>
-      2. She opens app → Home → Sync Phones<br>
-      3. She pastes the code and taps <strong>Import</strong>
+      2. Open app on other phone → Home → Sync Phones<br>
+      3. Paste the code and tap <strong>Import</strong>
     </div>
     <div>
       <div class="code-export">
@@ -561,6 +576,10 @@ function showSyncModal() {
     <div><label class="form-label" for="f-import">Import Code</label><textarea id="f-import" class="form-input form-input--mono" placeholder="Paste the export code here…"></textarea></div>
     <button class="btn btn--primary" data-action="import-data">⬇️ Import &amp; Sync</button>
     <p class="sync-note">⚠ Importing replaces all data on this phone</p>
+    <hr class="sync-divider" />
+    <p class="danger-zone-label">🔐 Server Access</p>
+    <button class="btn btn--subtle" data-action="show-api-token">🔑 Set Access Code</button>
+    <p class="sync-note">Required if your server is password-protected</p>
     <hr class="sync-divider" />
     <p class="danger-zone-label">⚠ Danger Zone</p>
     <button class="btn btn--outline-red" data-action="show-reset-confirm">🗑 Reset All Data…</button>
@@ -628,12 +647,45 @@ function importData() {
   try {
     const imp = JSON.parse(decodeURIComponent(escape(atob(raw))));
     if (!imp.bills || !imp.income || !imp.goals || !imp.debts) throw new Error('Invalid');
-    if (!Array.isArray(imp.ledger))   imp.ledger   = [];
-    if (!Array.isArray(imp.accounts)) imp.accounts = DEFAULT_ACCOUNTS.map((a) => ({ ...a }));
     AppData = imp;
+    _migrate();
     saveAppData(); hideModal();
     alert('✅ Data imported successfully!');
   } catch { alert('❌ Invalid code. Make sure you copied the full code.'); }
+}
+
+/* ── API Access Token ────────────────────────────────────── */
+
+function showApiTokenModal() {
+  const existing = localStorage.getItem('family-budget-api-token');
+  showModal('Server Access Code', `
+    <div class="info-panel info-panel--green">
+      If your server is password-protected, enter the access code here. It is stored only on this device.
+    </div>
+    <div>
+      <label class="form-label" for="f-api-token">Access Code ${existing ? '<span style="color:#1b4332">(✓ configured)</span>' : ''}</label>
+      <input id="f-api-token" class="form-input form-input--mono" type="password"
+             placeholder="${existing ? '••••••••••••' : 'Enter access code…'}"
+             autocomplete="off" autocorrect="off" autocapitalize="none" />
+    </div>
+    <button class="btn btn--primary" data-action="save-api-token">💾 Save Code</button>
+    ${existing ? '<button class="btn btn--outline-red" data-action="clear-api-token">🗑 Remove Code</button>' : ''}
+    <button class="btn btn--subtle" data-action="hide-modal">Cancel</button>
+  `);
+}
+
+function saveApiToken() {
+  const token = val('f-api-token');
+  if (!token) { alert('Please enter an access code.'); return; }
+  localStorage.setItem('family-budget-api-token', token);
+  hideModal();
+  loadAppData().then(() => render());
+}
+
+function clearApiToken() {
+  if (!confirm('Remove access code? Cloud sync will stop working until you re-enter it.')) return;
+  localStorage.removeItem('family-budget-api-token');
+  hideModal();
 }
 
 /* ── Install Modal ───────────────────────────────────────── */
@@ -652,4 +704,261 @@ function showInstallModal() {
     </div>
     <button class="btn btn--primary" data-action="hide-modal">Got it!</button>
   `);
+}
+
+/* ── Bill Payment History ────────────────────────────────── */
+
+function showBillHistoryModal(billId) {
+  const bill = AppData.bills.find((b) => b.id === billId);
+  if (!bill) return;
+  const payments = AppData.ledger
+    .filter((e) => e.billId === billId)
+    .sort((a, b) => b.date.localeCompare(a.date));
+
+  if (!payments.length) {
+    showModal(`History: ${bill.name}`, `
+      <div class="empty-state">No payments recorded for ${esc(bill.name)} yet.</div>
+    `);
+    return;
+  }
+
+  const byMonth = {};
+  payments.forEach((e) => {
+    const mk = e.date.slice(0, 7);
+    if (!byMonth[mk]) byMonth[mk] = [];
+    byMonth[mk].push(e);
+  });
+
+  const rows = Object.keys(byMonth).sort((a, b) => b.localeCompare(a)).map((mk) => {
+    const [y, m] = mk.split('-').map(Number);
+    const label  = new Date(y, m - 1, 1).toLocaleString('en-US', { month: 'long', year: 'numeric' });
+    const entries = byMonth[mk].map((e) => `
+      <div class="hist-entry">
+        <span class="hist-entry__date">${esc(e.date)}</span>
+        <span class="hist-entry__amount">${fmt(e.amount)}</span>
+        ${e.note ? `<span class="hist-entry__note">${esc(e.note)}</span>` : ''}
+      </div>`).join('');
+    return `<p class="section-heading mt-4">${esc(label)}</p>${entries}`;
+  }).join('');
+
+  const total = payments.reduce((s, e) => s + e.amount, 0);
+  showModal(`History: ${bill.name}`, `
+    <div class="info-panel info-panel--green">
+      ${payments.length} payment${payments.length !== 1 ? 's' : ''} · Total paid: <strong>${fmt(total)}</strong>
+    </div>
+    ${rows}
+  `);
+}
+
+/* ── Year-to-Date Summary ────────────────────────────────── */
+
+function showYtdSummaryModal() {
+  const year      = new Date().getFullYear();
+  const prefix    = `${year}-`;
+  const ytd       = AppData.ledger.filter((e) => e.date.startsWith(prefix));
+  const ytdIncome = ytd.filter((e) => e.type === 'income').reduce((s, e) => s + e.amount, 0);
+  const ytdSpend  = ytd.filter((e) => e.type === 'expense').reduce((s, e) => s + e.amount, 0);
+  const ytdNet    = ytdIncome - ytdSpend;
+
+  const byMonth = {};
+  ytd.forEach((e) => {
+    const mk = e.date.slice(0, 7);
+    if (!byMonth[mk]) byMonth[mk] = { income: 0, expense: 0 };
+    if (e.type === 'income')  byMonth[mk].income  += e.amount;
+    if (e.type === 'expense') byMonth[mk].expense += e.amount;
+  });
+  const monthRows = Object.keys(byMonth).sort((a, b) => b.localeCompare(a)).map((mk) => {
+    const [y, m] = mk.split('-').map(Number);
+    const label  = new Date(y, m - 1, 1).toLocaleString('en-US', { month: 'short', year: 'numeric' });
+    const net    = byMonth[mk].income - byMonth[mk].expense;
+    return `<tr class="ytd-row">
+      <td class="ytd-month">${esc(label)}</td>
+      <td class="ytd-in">${fmt(byMonth[mk].income)}</td>
+      <td class="ytd-out">${fmt(byMonth[mk].expense)}</td>
+      <td class="ytd-net ${net >= 0 ? 'ytd-net--pos' : 'ytd-net--neg'}">${net >= 0 ? '+' : ''}${fmt(net)}</td>
+    </tr>`;
+  }).join('');
+
+  const catTotals = {};
+  ytd.filter((e) => e.type === 'expense').forEach((e) => {
+    catTotals[e.category] = (catTotals[e.category] || 0) + e.amount;
+  });
+  const topCats = Object.entries(catTotals).sort((a, b) => b[1] - a[1]).slice(0, 5)
+    .map(([name, total]) => `<div class="ytd-cat-row"><span>${esc(spendEmoji(name))} ${esc(name)}</span><strong>${fmt(total)}</strong></div>`).join('');
+
+  showModal(`${year} Year-to-Date`, `
+    <div class="stat-grid stat-grid--3">
+      <div class="stat-box stat-box--saved"><p class="stat-box__label stat-box__label--green">INCOME</p><p class="stat-box__value stat-box__value--green">${fmt(ytdIncome)}</p></div>
+      <div class="stat-box stat-box--balance"><p class="stat-box__label stat-box__label--red">SPENT</p><p class="stat-box__value stat-box__value--red">${fmt(ytdSpend)}</p></div>
+      <div class="stat-box stat-box--goal"><p class="stat-box__label stat-box__label--gray">NET</p><p class="stat-box__value ${ytdNet >= 0 ? 'stat-box__value--green' : 'stat-box__value--red'}">${ytdNet >= 0 ? '+' : ''}${fmt(ytdNet)}</p></div>
+    </div>
+    ${topCats ? `<p class="section-heading mt-4">Top Spending Categories</p><div class="card">${topCats}</div>` : ''}
+    ${monthRows ? `
+      <p class="section-heading mt-4">Monthly Breakdown</p>
+      <div class="import-scroll">
+        <table class="import-table">
+          <thead><tr><th>Month</th><th class="import-th-amt">Income</th><th class="import-th-amt">Spent</th><th class="import-th-amt">Net</th></tr></thead>
+          <tbody>${monthRows}</tbody>
+        </table>
+      </div>` : `<div class="empty-state">No data for ${year} yet.</div>`}
+  `);
+}
+
+/* ── Export CSV ──────────────────────────────────────────── */
+
+function exportLedgerCsv() {
+  if (!AppData.ledger.length) { alert('No transactions to export.'); return; }
+  const headers = ['Date', 'Type', 'Name', 'Category', 'Amount', 'Account', 'Note'];
+  const rows = getSortedLedger().map((e) => {
+    const acc = AppData.accounts.find((a) => a.id === e.accountId);
+    return [
+      e.date,
+      e.type,
+      `"${(e.name     || '').replace(/"/g, '""')}"`,
+      e.category || '',
+      (e.type === 'income' ? e.amount : -e.amount).toFixed(2),
+      `"${(acc ? acc.name : '').replace(/"/g, '""')}"`,
+      `"${(e.note     || '').replace(/"/g, '""')}"`,
+    ].join(',');
+  });
+  const csv  = [headers.join(','), ...rows].join('\n');
+  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+  const url  = URL.createObjectURL(blob);
+  const a    = document.createElement('a');
+  a.href = url; a.download = `family-budget-${todayISO()}.csv`;
+  document.body.appendChild(a); a.click();
+  document.body.removeChild(a); URL.revokeObjectURL(url);
+}
+
+/* ── Budget Settings ─────────────────────────────────────── */
+
+function showBudgetSettingsModal() {
+  const cats = SPENDING_CATEGORIES.map((c) => {
+    const safeId = `budget-${c.name.replace(/\s+/g, '-')}`;
+    return `<div class="budget-cat-row">
+      <label class="budget-cat-label" for="${esc(safeId)}">
+        <span>${c.emoji}</span><span>${esc(c.name)}</span>
+      </label>
+      <input class="form-input budget-cat-input" type="number" placeholder="No limit"
+             id="${esc(safeId)}" value="${AppData.budgets && AppData.budgets[c.name] ? AppData.budgets[c.name] : ''}" min="0" step="1" />
+    </div>`;
+  }).join('');
+  showModal('Monthly Budget Limits', `
+    <div class="info-panel info-panel--green">
+      Set a monthly spending limit per category. Bars turn red when you go over. Leave blank for no limit.
+    </div>
+    ${cats}
+    <button class="btn btn--primary" data-action="save-budget">💾 Save Limits</button>
+  `);
+}
+
+function saveBudget() {
+  const budgets = {};
+  SPENDING_CATEGORIES.forEach((c) => {
+    const el  = document.getElementById(`budget-${c.name.replace(/\s+/g, '-')}`);
+    const amt = el ? parseFloat(el.value) || 0 : 0;
+    if (amt > 0) budgets[c.name] = amt;
+  });
+  AppData.budgets = budgets;
+  saveAppData();
+  hideModal();
+}
+
+/* ── Account Reconciliation ──────────────────────────────── */
+
+function showReconcileModal(accountId) {
+  const acc = AppData.accounts.find((a) => a.id === accountId);
+  if (!acc) return;
+  const appBalance = realBalance(accountId);
+  showModal(`Reconcile: ${acc.name}`, `
+    <div class="info-panel info-panel--green">
+      App calculates your balance as <strong>${fmt(appBalance)}</strong>.
+      Enter your bank's actual balance to see the discrepancy.
+    </div>
+    <div>
+      <label class="form-label" for="f-actual-bal">Actual Bank Balance ($)</label>
+      <input id="f-actual-bal" class="form-input" type="number"
+             placeholder="${appBalance.toFixed(2)}" step="0.01" autocomplete="off" />
+    </div>
+    <div id="reconcile-diff"></div>
+    <button class="btn btn--primary" data-action="save-reconcile" data-id="${esc(accountId)}">✅ Create Adjustment Entry</button>
+    <button class="btn btn--subtle" data-action="hide-modal">Cancel</button>
+  `);
+  requestAnimationFrame(() => {
+    document.getElementById('f-actual-bal')?.addEventListener('input', (e) => {
+      const actual = parseFloat(e.target.value);
+      const el     = document.getElementById('reconcile-diff');
+      if (!el || isNaN(actual)) { if (el) el.innerHTML = ''; return; }
+      const diff = actual - appBalance;
+      if (Math.abs(diff) < 0.01) {
+        el.innerHTML = `<div class="info-panel info-panel--green">✅ Balanced — no adjustment needed.</div>`;
+      } else {
+        el.innerHTML = `<div class="info-panel info-panel--yellow">
+          Difference: <strong>${diff > 0 ? '+' : ''}${fmt(diff)}</strong> —
+          logs a ${fmt(Math.abs(diff))} ${diff > 0 ? 'income' : 'expense'} adjustment.
+        </div>`;
+      }
+    });
+  });
+}
+
+function saveReconcile(accountId) {
+  const actual     = numVal('f-actual-bal');
+  const appBalance = realBalance(accountId);
+  const diff       = actual - appBalance;
+  if (Math.abs(diff) < 0.01) { alert('Balances match — no adjustment needed.'); hideModal(); return; }
+  logTransaction({
+    type:      diff > 0 ? 'income' : 'expense',
+    name:      'Balance Adjustment',
+    amount:    Math.abs(diff),
+    date:      todayISO(),
+    category:  diff > 0 ? 'Income' : 'Other',
+    accountId,
+    note:      'reconciliation',
+  });
+  hideModal();
+  render();
+}
+
+/* ── Bill Notifications ──────────────────────────────────── */
+
+function checkBillNotifications() {
+  if (typeof Notification === 'undefined' || Notification.permission !== 'granted') return;
+  const today    = todayISO();
+  const notified = JSON.parse(localStorage.getItem('bill-notifs') || '{}');
+  const now      = new Date();
+
+  AppData.bills.forEach((b) => {
+    if (getBillStatus(b) === 'paid') return;
+    const dueDate  = new Date(now.getFullYear(), now.getMonth(), b.day);
+    const daysLeft = Math.round((dueDate - now) / 86400000);
+    if (daysLeft < 0 || daysLeft > 3) return;
+    if (notified[b.id] === today) return;
+    new Notification(`Bill Due ${daysLeft === 0 ? 'Today' : `in ${daysLeft} day${daysLeft !== 1 ? 's' : ''}`}: ${b.name}`, {
+      body: `${fmt(b.amount)} due on the ${ord(b.day)}`,
+      tag:  `bill-${b.id}`,
+    });
+    notified[b.id] = today;
+  });
+  localStorage.setItem('bill-notifs', JSON.stringify(notified));
+}
+
+function _requestNotifications() {
+  if (typeof Notification === 'undefined') {
+    alert('Your browser does not support notifications.');
+    return;
+  }
+  if (Notification.permission === 'granted') {
+    checkBillNotifications();
+    alert('✅ Bill reminders are already enabled!');
+    return;
+  }
+  Notification.requestPermission().then((perm) => {
+    if (perm === 'granted') {
+      checkBillNotifications();
+      alert('✅ Reminders enabled — you\'ll get a notification when a bill is due within 3 days.');
+    } else {
+      alert('Notification permission was denied. You can enable it in your browser settings.');
+    }
+  });
 }

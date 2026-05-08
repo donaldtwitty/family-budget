@@ -2,6 +2,7 @@ package com.familybudget.service;
 
 import com.familybudget.model.AppDataEntity;
 import com.familybudget.repository.AppDataRepository;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
@@ -17,6 +18,7 @@ public class BudgetService {
 
     private static final Logger log = LoggerFactory.getLogger(BudgetService.class);
     private static final String DEFAULT_HOUSEHOLD = "default";
+    private static final ObjectMapper MAPPER = new ObjectMapper();
 
     private final AppDataRepository repo;
 
@@ -44,6 +46,11 @@ public class BudgetService {
     public void saveData(String json) {
         if (json == null || json.isBlank()) {
             throw new IllegalArgumentException("AppData payload must not be empty");
+        }
+        try {
+            MAPPER.readTree(json);
+        } catch (Exception e) {
+            throw new IllegalArgumentException("AppData payload must be valid JSON");
         }
 
         AppDataEntity entity = repo.findByHouseholdId(DEFAULT_HOUSEHOLD)

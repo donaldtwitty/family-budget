@@ -11,14 +11,16 @@
  * Builds or refreshes the dual-account header cards.
  */
 function updateHeader() {
-  document.getElementById('hlbl').textContent = MONTH_LABEL;
+  document.getElementById('hlbl').textContent = new Date().toLocaleString('en-US', { month: 'long', year: 'numeric' });
   const container = document.getElementById('account-cards');
   if (!container) return;
 
   // Rebuild cards if they don't exist
   if (!document.getElementById(`acc-card-${AppData.accounts[0].id}`)) {
     container.innerHTML = AppData.accounts.map((acc) => `
-      <div class="acc-card" id="acc-card-${esc(acc.id)}" data-acc-id="${esc(acc.id)}">
+      <div class="acc-card" id="acc-card-${esc(acc.id)}" data-acc-id="${esc(acc.id)}"
+           data-action="edit-account" data-id="${esc(acc.id)}" role="button" tabindex="0"
+           title="Tap to edit account / set balance">
         <p class="acc-card__name" data-acc-id="${esc(acc.id)}">${esc(acc.name)}</p>
         <p class="acc-card__safe-label">Safe to Spend</p>
         <p class="acc-card__safe" id="safe-${esc(acc.id)}">—</p>
@@ -80,6 +82,7 @@ function renderBillRow(bill, status, showEdit) {
   const acc      = AppData.accounts.find((a) => a.id === bill.accountId) || AppData.accounts[0];
   const editBtns = showEdit ? `
     <div class="edit-btns">
+      <button class="icon-btn icon-btn--hist" data-action="show-bill-history" data-id="${esc(bill.id)}" title="Payment history">📋</button>
       <button class="icon-btn icon-btn--edit" data-action="edit-bill" data-id="${esc(bill.id)}">${ICON_PENCIL}</button>
       <button class="icon-btn icon-btn--del"  data-action="del-bill"  data-id="${esc(bill.id)}">${ICON_TRASH}</button>
     </div>` : '';
@@ -205,6 +208,7 @@ function renderHome(showIncome) {
       <button class="btn btn--subtle" data-action="show-install">📲 Install App</button>
       <button class="btn btn--subtle" data-action="show-pin-settings">🔐 PIN Lock</button>
       <button class="btn btn--subtle" data-action="show-api-key-settings">🔑 Receipt Scan</button>
+      <button class="btn btn--subtle" data-action="enable-notifications">🔔 Bill Reminders</button>
     </div>`;
 }
 
@@ -272,24 +276,44 @@ function renderBills(showIncome, activeFilter) {
 
 /* ── Spend Tab ───────────────────────────────────────────── */
 
-/** @param {string} spendFilter @returns {string} */
-function renderSpend(spendFilter) {
-  const entries       = thisMonthSpending();
-  const incomeEntries = thisMonthIncome();
-  const catBreakdown  = spendingByCategory();
+/**
+ * @param {string} spendFilter
+ * @param {string} viewKey   "YYYY-MM" — which month to display
+ * @param {string} search    free-text search term
+ * @returns {string}
+ */
+function renderSpend(spendFilter, viewKey, search) {
+  const entries       = spendingForMonth(viewKey);
+  const incomeEntries = incomeForMonth(viewKey);
+  const catBreakdown  = spendingByCategoryForMonth(viewKey);
   const maxTotal      = catBreakdown.length ? catBreakdown[0].total : 1;
-  const filtered      = spendFilter === 'All' ? entries : entries.filter((e) => e.category === spendFilter);
+
+  const [vy, vm]       = viewKey.split('-').map(Number);
+  const monthLabel     = new Date(vy, vm - 1, 1).toLocaleString('en-US', { month: 'long', year: 'numeric' });
+  const isCurrentMonth = viewKey === _monthKey();
+
+  const searchTerm  = (search || '').toLowerCase().trim();
+  const allFiltered = spendFilter === 'All' ? entries : entries.filter((e) => e.category === spendFilter);
+  const filtered    = searchTerm
+    ? allFiltered.filter((e) =>
+        (e.name     || '').toLowerCase().includes(searchTerm) ||
+        (e.category || '').toLowerCase().includes(searchTerm) ||
+        (e.note     || '').toLowerCase().includes(searchTerm))
+    : allFiltered;
 
   const groups = {};
   filtered.forEach((e) => { if (!groups[e.date]) groups[e.date] = []; groups[e.date].push(e); });
   const sortedDates = Object.keys(groups).sort((a, b) => b.localeCompare(a));
 
   const catBars = catBreakdown.slice(0, 6).map((c) => {
-    const pct = (c.total / maxTotal) * 100;
+    const budget     = AppData.budgets && AppData.budgets[c.name];
+    const pct        = budget ? Math.min((c.total / budget) * 100, 100) : (c.total / maxTotal) * 100;
+    const overBudget = budget && c.total > budget;
+    const budgetText = budget ? ` / ${fmt(budget)}` : '';
     return `<div class="spend-cat-row">
       <div class="spend-cat-row__label"><span>${esc(c.emoji)}</span><span class="spend-cat-row__name">${esc(c.name)}</span></div>
-      <div class="spend-cat-row__bar-wrap">${renderProgressBar(pct, 'light', 'green')}</div>
-      <span class="spend-cat-row__total">${fmt(c.total)}</span>
+      <div class="spend-cat-row__bar-wrap">${renderProgressBar(pct, 'light', overBudget ? 'red' : 'green')}</div>
+      <span class="spend-cat-row__total${overBudget ? ' spend-cat-row__total--over' : ''}">${fmt(c.total)}${budgetText}</span>
     </div>`;
   }).join('');
 
@@ -303,27 +327,36 @@ function renderSpend(spendFilter) {
         <p class="section-heading mt-6">${friendlyDate(date)}</p>
         ${groups[date].map((e) => renderLedgerRow(e, false)).join('')}
       `).join('')
-    : '<div class="empty-state">No expenses logged this month yet 👍</div>';
+    : `<div class="empty-state">${searchTerm ? `No results for "${esc(searchTerm)}"` : 'No expenses logged this month yet 👍'}</div>`;
 
   const incomeRows = incomeEntries.length ? `
-    <p class="section-heading mt-6">💵 Income This Month</p>
+    <p class="section-heading mt-6">💵 Income — ${esc(monthLabel)}</p>
     <div class="income-this-month">${incomeEntries.map((e) => renderLedgerRow(e, false)).join('')}</div>
   ` : '';
 
   return `
     <div class="hero hero--green">
-      <p class="hero__label">Spent This Month</p>
+      <p class="hero__label">Spent — ${esc(monthLabel)}</p>
       <p class="hero__amount">${fmt(entries.reduce((s, e) => s + e.amount, 0))}</p>
       <p class="hero__sub">${entries.length} transaction${entries.length !== 1 ? 's' : ''} logged</p>
+      <div class="month-nav">
+        <button class="month-nav__btn" data-action="prev-month">‹</button>
+        <span class="month-nav__label">${esc(monthLabel)}</span>
+        <button class="month-nav__btn" data-action="next-month"${isCurrentMonth ? ' disabled' : ''}>›</button>
+      </div>
     </div>
     <div class="spend-actions">
       <button class="btn btn--primary btn--icon spend-actions__primary" data-action="add-expense">${ICON_PLUS} Log an Expense</button>
-      <button class="btn btn--outline-green btn--icon desktop-only" data-action="start-csv-import">
-        <svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
-        Import Bank CSV
-      </button>
     </div>
-    ${catBreakdown.length ? `<p class="section-heading mt-6">📊 This Month by Category</p><div class="card">${catBars}</div>` : ''}
+    <div class="spend-tools">
+      <button class="btn btn--subtle" data-action="start-csv-import">📊 Import CSV</button>
+      <button class="btn btn--subtle" data-action="show-budget-settings">💰 Budgets</button>
+      <button class="btn btn--subtle" data-action="show-ytd-summary">📅 YTD</button>
+      <button class="btn btn--subtle" data-action="export-csv">📤 Export</button>
+    </div>
+    <input id="spend-search" class="spend-search" type="search"
+           placeholder="Search transactions…" value="${esc(searchTerm)}" autocomplete="off" />
+    ${catBreakdown.length ? `<p class="section-heading mt-6">📊 ${esc(monthLabel)} by Category</p><div class="card">${catBars}</div>` : ''}
     <div class="chips mt-6">${chips}</div>
     ${txRows}
     ${incomeRows}`;
@@ -336,7 +369,7 @@ function renderGoals() {
   const tTarget = AppData.goals.reduce((s, g) => s + g.target, 0);
   const cards   = AppData.goals.map((g) => {
     const p        = g.target > 0 ? (g.saved / g.target) * 100 : 0;
-    const daysLeft = g.date ? Math.ceil((new Date(g.date + 'T00:00:00') - TODAY) / 86400000) : null;
+    const daysLeft = g.date ? Math.ceil((new Date(g.date + 'T00:00:00') - new Date()) / 86400000) : null;
     const dClass   = daysLeft === null ? '' : daysLeft < 30 ? 'goal-card__days--urgent' : daysLeft < 90 ? 'goal-card__days--warning' : 'goal-card__days--normal';
     const dText    = daysLeft === null ? '' : daysLeft > 0 ? `${daysLeft} days left` : 'Target date reached';
     return `<div class="card goal-card">
@@ -380,7 +413,7 @@ function renderGoals() {
 function renderDebts() {
   const tPay  = AppData.debts.reduce((s, d) => s + d.payment, 0);
   const cards = AppData.debts.map((d) => {
-    const payoff      = calcPayoff(d, TODAY);
+    const payoff      = calcPayoff(d, new Date());
     const linkedBill  = AppData.bills.find((b) => b.debtId === d.id);
     const linkedBadge = linkedBill
       ? `<span class="debt-linked-badge">🔗 Linked to "${esc(linkedBill.name)}" bill</span>`

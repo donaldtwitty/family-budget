@@ -5,13 +5,24 @@
 
 /* eslint-disable no-unused-vars */
 
-const STORAGE_KEY = 'family-budget-v5';
-const TODAY       = new Date();
-const TODAY_DAY   = TODAY.getDate();
-const MONTH_LABEL = TODAY.toLocaleString('en-US', { month: 'long', year: 'numeric' });
+const STORAGE_KEY     = 'family-budget-v5';
+const API_TOKEN_KEY   = 'family-budget-api-token';
 
 /** @type {object} Live application data */
 let AppData = {};
+
+/* ── API Token (server auth) ─────────────────────────────── */
+
+function _getApiToken() {
+  try { return localStorage.getItem(API_TOKEN_KEY) || ''; } catch { return ''; }
+}
+
+function _authHeaders(extra) {
+  const token = _getApiToken();
+  const h = { 'Content-Type': 'application/json', ...extra };
+  if (token) h['Authorization'] = `Bearer ${token}`;
+  return h;
+}
 
 /* ── Load / Save ─────────────────────────────────────────── */
 
@@ -23,11 +34,33 @@ let AppData = {};
 async function loadAppData() {
   // Server is authoritative — always fetch so all devices stay in sync
   try {
-    const res = await fetch('/api/data');
-    if (res.status === 200) {
+    const res = await fetch('/api/data', { headers: _authHeaders() });
+    if (res.status === 401) {
+      // Auth required — will fall back to localStorage; user can set token via Sync modal
+      console.warn('Server requires access token — using localStorage until token is configured');
+    } else if (res.status === 200) {
       const json = await res.text();
       if (json && json.trim().length > 0) {
-        AppData = JSON.parse(json);
+        const serverData = JSON.parse(json);
+
+        // Conflict detection: if localStorage is newer, push it back up rather than overwrite
+        try {
+          const stored = localStorage.getItem(STORAGE_KEY);
+          if (stored) {
+            const localData = JSON.parse(stored);
+            const serverTime = serverData._savedAt || '';
+            const localTime  = localData._savedAt  || '';
+            if (localTime > serverTime) {
+              console.warn('Local data is newer than server — pushing local data to server');
+              AppData = localData;
+              _migrate();
+              fetch('/api/data', { method: 'PUT', headers: _authHeaders(), body: stored }).catch(() => {});
+              return;
+            }
+          }
+        } catch { /* ignore — proceed with server data */ }
+
+        AppData = serverData;
         _migrate();
         localStorage.setItem(STORAGE_KEY, json);
         return;
@@ -55,6 +88,7 @@ async function loadAppData() {
     income:   DEFAULT_INCOME.map((i)   => ({ ...i })),
     goals:    DEFAULT_GOALS.map((g)    => ({ ...g })),
     debts:    DEFAULT_DEBTS.map((d)    => ({ ...d })),
+    budgets:  {},
     ledger:   [],
   };
 }
@@ -93,6 +127,9 @@ function _migrate() {
   if (!Array.isArray(AppData.goals))  AppData.goals  = [];
   if (!Array.isArray(AppData.debts))  AppData.debts  = [];
   if (!Array.isArray(AppData.income)) AppData.income = [];
+  if (!AppData.budgets || typeof AppData.budgets !== 'object' || Array.isArray(AppData.budgets)) {
+    AppData.budgets = {};
+  }
 }
 
 let _saveTimer = null;
@@ -103,6 +140,7 @@ let _saveTimer = null;
 function saveAppData() {
   clearTimeout(_saveTimer);
   _saveTimer = setTimeout(() => {
+    AppData._savedAt = new Date().toISOString();
     const json = JSON.stringify(AppData);
     try {
       localStorage.setItem(STORAGE_KEY, json);
@@ -113,19 +151,22 @@ function saveAppData() {
     }
     fetch('/api/data', {
       method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
+      headers: _authHeaders(),
       body: json,
+    }).then((res) => {
+      if (res.status === 401) _flashSave('auth');
     }).catch((err) => console.warn('Server sync failed:', err));
   }, 150);
 }
 
-/** @param {'ok'|'err'} type */
+/** @param {'ok'|'err'|'auth'} type */
 function _flashSave(type) {
   const el = document.getElementById('savemsg');
   if (!el) return;
-  el.textContent = type === 'ok' ? '✓ Saved' : '⚠ Save failed';
-  el.className   = `save-msg ${type}`;
-  setTimeout(() => { el.textContent = ''; el.className = 'save-msg'; }, 1800);
+  const msgs = { ok: '✓ Saved', err: '⚠ Save failed', auth: '⚠ Sync needs access code' };
+  el.textContent = msgs[type] || '⚠ Save failed';
+  el.className   = `save-msg ${type === 'ok' ? 'ok' : 'err'}`;
+  setTimeout(() => { el.textContent = ''; el.className = 'save-msg'; }, 3000);
 }
 
 /* ── Ledger Mutations ────────────────────────────────────── */
@@ -153,6 +194,7 @@ function logTransaction(entry) {
  * @param {string} id
  */
 function deleteTransaction(id) {
+  if (!confirm('Delete this transaction? This cannot be undone.')) return;
   AppData.ledger = AppData.ledger.filter((e) => e.id !== id);
   saveAppData();
 }
@@ -165,15 +207,17 @@ function deleteTransaction(id) {
  * @returns {'paid'|'pending'|'overdue'}
  */
 function getBillStatus(bill) {
-  const day = parseInt(bill.day, 10);
+  const today    = new Date();
+  const todayDay = today.getDate();
+  const day      = parseInt(bill.day, 10);
   if (!day || day < 1 || day > 31) return 'pending';
-  const cycleStart = getCycleStart(day, TODAY);
+  const cycleStart    = getCycleStart(day, today);
   const cycleStartISO = cycleStart.toISOString().slice(0, 10);
   const paid = AppData.ledger.some(
     (e) => e.type === 'bill' && e.billId === bill.id && e.date >= cycleStartISO
   );
   if (paid) return 'paid';
-  if (TODAY_DAY >= bill.day) return 'overdue';
+  if (todayDay >= bill.day) return 'overdue';
   return 'pending';
 }
 
@@ -196,16 +240,16 @@ function pendingBills(accountId) {
 
 /**
  * Running balance for an account.
- * Income adds; bills and expenses subtract.
+ * Starts from the account's openingBalance, then applies all ledger entries.
  * @param {string} accountId
  * @returns {number}
  */
 function realBalance(accountId) {
-  return AppData.ledger
+  const acc     = AppData.accounts.find((a) => a.id === accountId);
+  const opening = (acc && acc.openingBalance) ? Number(acc.openingBalance) : 0;
+  return opening + AppData.ledger
     .filter((e) => e.accountId === accountId)
-    .reduce((sum, e) => {
-      return e.type === 'income' ? sum + e.amount : sum - e.amount;
-    }, 0);
+    .reduce((sum, e) => (e.type === 'income' ? sum + e.amount : sum - e.amount), 0);
 }
 
 /**
@@ -258,64 +302,65 @@ function getRunningBalances() {
   return result.reverse();
 }
 
-/**
- * Spending entries in the current calendar month.
- * @returns {Array}
- */
-function thisMonthSpending() {
-  const mk = `${TODAY.getFullYear()}-${String(TODAY.getMonth() + 1).padStart(2, '0')}`;
+/** @returns {string} Current month prefix as "YYYY-MM" */
+function _monthKey() {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+}
+
+/* ── Month-parameterized ledger queries ──────────────────── */
+
+/** @param {string} mk "YYYY-MM" @returns {Array} */
+function spendingForMonth(mk) {
   return AppData.ledger
     .filter((e) => e.type === 'expense' && e.date.startsWith(mk))
     .sort((a, b) => b.date.localeCompare(a.date));
 }
 
-/**
- * Income entries in the current calendar month.
- * @returns {Array}
- */
-function thisMonthIncome() {
-  const mk = `${TODAY.getFullYear()}-${String(TODAY.getMonth() + 1).padStart(2, '0')}`;
+/** @param {string} mk @returns {Array} */
+function incomeForMonth(mk) {
   return AppData.ledger
     .filter((e) => e.type === 'income' && e.date.startsWith(mk))
     .sort((a, b) => b.date.localeCompare(a.date));
 }
 
-/**
- * Income ledger entries this month linked to a specific income source.
- * @param {string} incomeId
- * @returns {Array}
- */
-function incomeReceivedThisMonth(incomeId) {
-  const mk = `${TODAY.getFullYear()}-${String(TODAY.getMonth() + 1).padStart(2, '0')}`;
+/** @param {string} incomeId @param {string} mk @returns {Array} */
+function incomeReceivedInMonth(incomeId, mk) {
   return AppData.ledger.filter(
     (e) => e.type === 'income' && e.incomeId === incomeId && e.date.startsWith(mk)
   );
 }
 
-/**
- * Income ledger entries this month NOT linked to any income source template.
- * @returns {Array}
- */
-function unlinkedIncomeThisMonth() {
-  const mk = `${TODAY.getFullYear()}-${String(TODAY.getMonth() + 1).padStart(2, '0')}`;
+/** @param {string} mk @returns {Array} */
+function unlinkedIncomeForMonth(mk) {
   return AppData.ledger.filter(
     (e) => e.type === 'income' && !e.incomeId && e.date.startsWith(mk)
   ).sort((a, b) => b.date.localeCompare(a.date));
 }
 
-/**
- * Spending grouped by category for the current month.
- * @returns {Array<{ name: string, emoji: string, total: number }>}
- */
-function spendingByCategory() {
+/** @param {string} mk @returns {Array<{ name: string, emoji: string, total: number }>} */
+function spendingByCategoryForMonth(mk) {
   const map = {};
-  thisMonthSpending().forEach((e) => {
+  spendingForMonth(mk).forEach((e) => {
     map[e.category] = (map[e.category] || 0) + e.amount;
   });
   return Object.entries(map)
     .map(([name, total]) => ({ name, emoji: spendEmoji(name), total }))
     .sort((a, b) => b.total - a.total);
 }
+
+/* ── Current-month convenience wrappers ──────────────────── */
+
+/** @returns {Array} */
+function thisMonthSpending() { return spendingForMonth(_monthKey()); }
+/** @returns {Array} */
+function thisMonthIncome()   { return incomeForMonth(_monthKey()); }
+/** @param {string} incomeId @returns {Array} */
+function incomeReceivedThisMonth(incomeId) { return incomeReceivedInMonth(incomeId, _monthKey()); }
+/** @returns {Array} */
+function unlinkedIncomeThisMonth() { return unlinkedIncomeForMonth(_monthKey()); }
+/** @returns {Array<{ name: string, emoji: string, total: number }>} */
+function spendingByCategory() { return spendingByCategoryForMonth(_monthKey()); }
 
 /** @returns {number} */
 function totalSaved() {
