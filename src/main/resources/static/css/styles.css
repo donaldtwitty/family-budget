@@ -504,7 +504,8 @@ button { font-family: var(--font-body); cursor: pointer; }
 .income-row__main   { display: flex; justify-content: space-between; align-items: flex-start; }
 .income-row__name   { font-size: 14px; font-weight: 600; display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
 .income-row__day    { font-size: 12px; color: var(--text-faint); }
-.income-row__entry  { font-size: 11px; color: var(--green-700); margin-top: 3px; }
+.income-row__entry-row { display: flex; align-items: center; gap: 4px; }
+.income-row__entry  { font-size: 11px; color: var(--green-700); margin-top: 3px; flex: 1; }
 .income-row__right  { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
 .income-row__amount { font-size: 16px; font-weight: 700; color: var(--green-900); }
 

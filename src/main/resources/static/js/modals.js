@@ -547,8 +547,10 @@ function saveIncomeTemplate(editId) {
 }
 
 function deleteIncome(id) {
-  if (!confirm('Remove this income source?')) return;
+  if (!confirm('Remove this income source? Any logged income entries will be unlinked but not deleted.')) return;
   AppData.income = AppData.income.filter((i) => i.id !== id);
+  // Unlink ledger entries that referenced this source so they don't silently orphan
+  AppData.ledger = AppData.ledger.map((e) => e.incomeId === id ? { ...e, incomeId: null } : e);
   saveAppData();
 }
 

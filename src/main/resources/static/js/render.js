@@ -232,7 +232,10 @@ function renderBills(showIncome, activeFilter) {
       ? `<span class="income-status income-status--received">✓ RECEIVED</span>`
       : `<span class="income-status income-status--expected">EXPECTED</span>`;
     const receivedDetail = received.map((e) =>
-      `<p class="income-row__entry">↳ ${esc(e.date)} &nbsp;${fmt(e.amount)}${e.note ? ` · ${esc(e.note)}` : ''}</p>`
+      `<div class="income-row__entry-row">
+        <p class="income-row__entry">↳ ${esc(e.date)} &nbsp;${fmt(e.amount)}${e.note ? ` · ${esc(e.note)}` : ''}</p>
+        <button class="icon-btn icon-btn--del" data-action="del-transaction" data-id="${esc(e.id)}" title="Delete this entry">${ICON_TRASH}</button>
+      </div>`
     ).join('');
     return `<div class="card income-row">
       <div class="income-row__main">
