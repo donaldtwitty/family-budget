@@ -336,20 +336,21 @@ function renderSpend(spendFilter, viewKey, search) {
 
   return `
     <div class="hero hero--green">
-      <p class="hero__label">Spent — ${esc(monthLabel)}</p>
+      <p class="hero__label">Spent This Month</p>
       <p class="hero__amount">${fmt(entries.reduce((s, e) => s + e.amount, 0))}</p>
       <p class="hero__sub">${entries.length} transaction${entries.length !== 1 ? 's' : ''} logged</p>
-      <div class="month-nav">
-        <button class="month-nav__btn" data-action="prev-month">‹</button>
-        <span class="month-nav__label">${esc(monthLabel)}</span>
-        <button class="month-nav__btn" data-action="next-month"${isCurrentMonth ? ' disabled' : ''}>›</button>
-      </div>
     </div>
-    <div class="spend-actions">
-      <button class="btn btn--primary btn--icon spend-actions__primary" data-action="add-expense">${ICON_PLUS} Log an Expense</button>
+    <div class="month-nav">
+      <button class="month-nav__btn" data-action="prev-month">‹</button>
+      <span class="month-nav__label">${esc(monthLabel)}</span>
+      <button class="month-nav__btn" data-action="next-month"${isCurrentMonth ? ' disabled' : ''}>›</button>
     </div>
+    <button class="btn btn--primary btn--icon" data-action="add-expense">${ICON_PLUS} Log an Expense</button>
+    <button class="btn btn--outline-green btn--icon" data-action="start-csv-import">
+      <svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+      Import Bank CSV
+    </button>
     <div class="spend-tools">
-      <button class="btn btn--subtle" data-action="start-csv-import">📊 Import CSV</button>
       <button class="btn btn--subtle" data-action="show-budget-settings">💰 Budgets</button>
       <button class="btn btn--subtle" data-action="show-ytd-summary">📅 YTD</button>
       <button class="btn btn--subtle" data-action="export-csv">📤 Export</button>
